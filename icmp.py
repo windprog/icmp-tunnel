@@ -40,13 +40,6 @@ class ICMPPacket(IPPacket):
             print "parse ICMP type=", self._type, "code=", self.code, "id=", self.id, "seqno=", self.seqno
         return buf[28:]
 
-    def createEx(self, type_, code, id_, seqno, data,Ischksum=True):
-        packfmt = "!BBHHH%ss" % (len(data))
-        args = [type_, code, 0, id_, seqno, data]
-        if Ischksum==True:
-            args[2] = IPPacket._checksum(self, struct.pack(packfmt, *args))
-        return struct.pack(packfmt, *args)
-
     def create(self, type_, code, id_, seqno, data):
         packfmt = "!BBHHH%ss" % (len(data))
         args = [type_, code, 0, id_, seqno, data]
