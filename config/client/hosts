@@ -1,0 +1,41 @@
+127.0.0.1	localhost
+127.0.1.1	UbuntuServer
+172.16.7.7 bbs.sise.com.cn
+172.16.2.4 www.sise.com.cn
+172.16.4.222 home.sise.cn
+172.16.31.1 na.sise.cn
+
+174.35.3.24 ww1.sinaimg.cn
+174.35.3.56 ww2.sinaimg.cn
+174.35.3.51 ww3.sinaimg.cn
+174.35.3.44 ww4.sinaimg.cn
+
+174.35.3.7 tp1.sinaimg.cn
+174.35.3.24 tp2.sinaimg.cn
+174.35.3.51 tp3.sinaimg.cn
+174.35.3.44 tp4.sinaimg.cn
+
+123.126.56.244 photo.weibo.com
+174.35.3.6 api.weibo.com
+
+174.35.3.42 www.weibo.com
+114.134.80.162 weibo.com
+
+123.125.65.91 zhidao.baidu.com
+61.135.185.66 wenku.baidu.com
+123.125.65.91 baike.baidu.com
+123.125.115.60 image.baidu.com
+123.125.65.93 tieba.baidu.com
+123.125.114.18 news.baidu.com
+111.13.12.63 hi.baidu.com
+
+121.14.141.32 static.youku.com
+
+216.157.85.151 www.ip.cn
+
+# The following lines are desirable for IPv6 capable hosts
+::1     localhost ip6-localhost ip6-loopback
+fe00::0 ip6-localnet
+ff00::0 ip6-mcastprefix
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters

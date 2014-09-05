@@ -1,0 +1,3 @@
+apt-get install expect
+
+这样就能执行SecureNetwork.sh了

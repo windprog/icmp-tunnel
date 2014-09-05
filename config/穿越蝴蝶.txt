@@ -1,0 +1,79 @@
+ip link set t0 mtu 1396
+MTU要准确 1396
+data = os.read(self.tfd, globalvar.MTU)
+读取缓存要大65000
+ip route add 199.230.109.242 via 172.16.136.254 dev eth1
+ip route del default
+ip route add default dev t0
+
+
+iptables -t nat -A POSTROUTING -s 10.1.2.0/24 -j SNAT --to-source 199.230.109.242
+iptables -t nat -A POSTROUTING -s 10.1.2.0/24 -o eth0 -j MASQUERADE
+iptables -P FORWARD ACCEPT
+iptables -P INPUT ACCEPT
+iptables -F
+sysctl -p
+
+
+
+//Server
+/home/server.py -l 10.1.2.1/24 &
+sleep 1
+ip link set t0 mtu 1396
+iptables -t nat -A POSTROUTING -s 10.1.2.0/24 -o eth0 -j MASQUERADE
+#iptables -t nat -A POSTROUTING -s 10.1.2.0/24 -j SNAT --to-source 209.141.63.120
+
+
+
+//Client
+serverIP="199.230.109.242"
+meIPAdd=$(ifconfig|perl -ne 'print $1 if /.*?inet.{1,20}:(?!127.0.0.1|10.1.2.2)(([0-9]+\.){3}[0-9]+)/;')
+meIPMask=$(netstat -nr|perl -ne 'print $1 if /0\.0\.0\.0.*?([0-9.]+)[^0]*0\.0\.0\.0/;')
+meEthName=$(ifconfig|perl -ne 'print $1 if /.*?(eth[0-9])/;')
+echo $serverIP $meIPAdd $meIPMask $meEthName
+/home/icmp/client.py -c $serverIP -l 10.1.2.2/24 &
+sleep 1
+ip route add $serverIP via $meIPMask dev $meEthName
+ip route add 172.16.0.0/16 via $meIPMask dev $meEthName
+ip route del default
+ip route add default dev t0
+iptables -t nat -A POSTROUTING -s 192.171.0.0/24 -j SNAT --to-source $meIPAdd
+ip link set t0 mtu 1472
+
+//Client实例
+sleep 10
+/home/icmp/client.py -c 209.141.63.120 -l 10.1.2.2/24 &
+ip route add 209.141.63.120 via 172.16.136.254 dev eth0
+ip route add 172.16.0.0/16 via 172.16.136.254 dev eth0
+ip route del default
+sleep 1
+ip route add default dev t0
+ip link set t0 mtu 1396
+iptables -t nat -A POSTROUTING -s 192.171.0.0/24 -o t0 -j MASQUERADE
+service squid start &
+
+
+//获得本地IP地址
+ifconfig | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}'
+ifconfig|perl -ne 'print $1 if /.*?addr:(?!127.0.0.1)(([0-9]+\.){3}[0-9]+)/;'
+//网关
+netstat -nr|perl -ne 'print $1 if /0\.0\.0\.0.*?([0-9.]+)[^0]*0\.0\.0\.0/;'
+//网卡名
+ifconfig|perl -ne 'print $1 if /.*?(eth[0-9])/;'
+
+命令|perl -ne 'print $分组编号 if /正则表达式，要转义/;'
+
+iptables -t nat -A POSTROUTING -s 192.171.0.0/24 -j SNAT --to-source 10.1.2.1
+ip link set eth0 mtu 3500
+ip link set t0 mtu 3300    //网卡要设大
+
+
+
+//映射端口
+//server
+iptables -t nat -A PREROUTING -d 209.141.63.120 -p tcp --dport 80 -j DNAT --to 10.1.2.2
+iptables -t nat -A POSTROUTING -d 10.1.2.2 -p tcp --dport 80 -j SNAT --to 209.141.63.120
+
+//client
+iptables -t nat -A PREROUTING -d 10.1.2.2 -p tcp --dport 80 -j DNAT --to 172.16.136.136
+iptables -t nat -A POSTROUTING -d 172.16.136.136 -p tcp --dport 80 -j SNAT --to 10.1.2.2

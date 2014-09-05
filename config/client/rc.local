@@ -1,0 +1,78 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          rc.local
+# Required-Start:    $remote_fs $syslog $all
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+# Short-Description: Run /etc/rc.local if it exist
+### END INIT INFO
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+
+. /lib/init/vars.sh
+. /lib/lsb/init-functions
+
+do_start() {
+	if [ -x /etc/rc.local ]; then
+	        [ "$VERBOSE" != no ] && log_begin_msg "Running local boot scripts (/etc/rc.local)"
+		/etc/rc.local
+		ES=$?
+		[ "$VERBOSE" != no ] && log_end_msg $ES
+		return $ES
+	fi
+}
+
+case "$1" in
+    start)
+	do_start
+        ;;
+    restart|reload|force-reload)
+        echo "Error: argument '$1' not supported" >&2
+        exit 3
+        ;;
+    stop)
+        ;;
+    *)
+        echo "Usage: $0 start|stop" >&2
+        exit 3
+        ;;
+esac
+
+#start network
+meIPAdd=$(ifconfig|perl -ne 'print $1 if /.*?inet.{1,20}:(?!127.0.0.1|10.1.2.2)(([0-9]+\.){3}[0-9]+)/;')
+meIPMask=$(netstat -nr|perl -ne 'print $1 if /0\.0\.0\.0.*?([0-9.]+)[^0]*0\.0\.0\.0/;')
+meEthName=$(ifconfig|perl -ne 'print $1 if /.*?(eth[0-9])/;')
+echo $meIPAdd $meIPMask $meEthName
+sleep 1
+/home/icmp/client.py -c 209.141.63.120 -l 10.1.120.2/24 &
+echo "Server 209.141.63.120 Network t0 is start"
+sleep 1
+/home/icmp/client.py -c 42.121.122.21 -l 10.1.21.2/24 &
+echo "Server 42.121.122.21 Network t1 is start"
+sleep 1
+/home/icmp/client.py -c 199.230.109.242 -l 10.1.242.2/24 &
+echo "Server 199.230.109.242 Network t2 is start"
+sleep 1
+/home/icmp/client.py -c 199.229.255.41 -l 10.1.41.2/24 &
+echo "Server 199.229.255.41 Network t3 is start"
+sleep 3
+ip route add 199.229.255.41 via $meIPMask dev $meEthName
+ip route add 42.121.122.21 via $meIPMask dev $meEthName
+ip route add 199.230.109.242 via $meIPMask dev $meEthName
+ip route add 209.141.63.120 via $meIPMask dev $meEthName
+ip route add 172.16.0.0/16 via $meIPMask dev $meEthName
+ip route del default
+ip link set t0 mtu 1396
+ip link set t1 mtu 1396
+ip link set t2 mtu 1396
+ip link set t3 mtu 1396
+#choose Network
+/home/chooseNetworkDo.sh
+#iptables -t nat -A POSTROUTING -s 192.171.0.0/24 -j SNAT --to-source 10.1.120.2
+service squid start &
+
+#Youku To t2
+ip route add 212.26.250.0/24 via 10.1.242.1 dev t2
+ip route add 222.133.46.0/24 via 10.1.242.1 dev t2
+ip route add 218.61.198.0/24 via 10.1.242.1 dev t2
