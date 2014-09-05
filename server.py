@@ -8,8 +8,11 @@ import icmp
 import time
 import struct
 import socket, select
+import PThread
 import globalvar
-import ReadCPU
+from Queue import Queue
+import thread
+import threading
 
 class Tunnel():
     def create(self):
@@ -22,7 +25,7 @@ class Tunnel():
         
     def config(self, ip):
         os.system("ip link set %s up" % (self.tname))
-        os.system("ip link set %s mtu 1000" % (self.tname))
+        os.system("ip link set %s mtu 1396" % (self.tname))
         os.system("ip addr add %s dev %s" % (ip, self.tname))
     
     def run(self):
@@ -33,76 +36,88 @@ class Tunnel():
             for r in rset:
                 if r == self.tfd:
                     data = os.read(self.tfd, globalvar.MTU)
-                    if ReadCPU.CPU0>globalvar.CPULimit:
-                        globalvar.NeedSendZip=False
-                    else:
-                        globalvar.NeedSendZip=True
-                    if globalvar.NeedSendZip:#Need Zip
-                        #encoding zip
+                    if len(data)>24:
+                        globalvar.cond.acquire()
                         try:
-                            data = icmp.enZipData(data)
+                            PThread.outputPacket[globalvar.DefaultServerIP].put(data)
                         except:
-                            time.sleep(0.01)
-                            try:
-                                data = icmp.enZipData(data)
-                            except:
-                                pass
-                        buf = packet.createByServer(globalvar.NowIdentity,0x4148, data)
-                    else:
-                        buf = packet.createByServer(globalvar.NowIdentity,0x4147, data)
-                    if globalvar.debug:
-                        print "send ICMP type=", packet._type,"code=",packet.code,"chksum=",packet.chksum,"id=", packet.id, "seqno=", packet.seqno,"data size:",len(buf)-8
-                    #send packet
-                    try:
-                        self.icmpfd.sendto(buf, (globalvar.ClientIP, 22))
-                    except:
-                        time.sleep(0.01)
-                        try:
-                            self.icmpfd.sendto(buf, (globalvar.ClientIP, 22))
-                        except:
-                            time.sleep(0.5)
-                            try:
-                                self.icmpfd.sendto(buf, (globalvar.ClientIP, 22))
-                            except:
-                                pass
-                        
-                        
+                            print 'Server is notfound.'
+                        globalvar.cond.notify()
+                        globalvar.cond.release()
                 elif r == self.icmpfd:
                     buf = self.icmpfd.recv(icmp.BUFFER_SIZE)
-                    data = packet.parse(buf, False)
-                    if globalvar.debug:
-                        print "recv ICMP type=", packet._type,"code=",packet.code,"chksum=",packet.chksum,"id=", packet.id, "seqno=", packet.seqno,"data size:",len(data)
-                    if packet.seqno == 0x4147:#True packet And No ZIp
-                        # Simply write the packet to local or forward them to other clients ???
-                        globalvar.NowIdentity = packet.id
-                        src = buf[12:16]
-                        globalvar.ClientIP = socket.inet_ntoa(src)                    
+                    data = packet.parse(buf, False) 
+                    if packet.seqno == globalvar.Password:#true password
+                        if len(data)>20:                       
+                            #process accept
+                            #read packet
+                            start = 0
+                            end = 0
+                            while start!=len(data):                
+                                countByte = data[start:start+2]
+                                count, = struct.unpack("!H",countByte)
+                                start+=2
+                                end=count+start
+                                #write t0
+                                if end>len(data):
+                                    break                
+                                os.write(globalvar.tun.tfd, data[start:end])
+                                start=end
+                                if end==len(data):
+                                    break
+                    elif packet.seqno == globalvar.Password+1:
+                        if data=='update':
+                            globalvar.NowIdentity = packet.id
+                            src = buf[12:16]
+                            globalvar.DefaultServerIP = socket.inet_ntoa(src)  
+                            if not PThread.outputPacket.has_key(globalvar.DefaultServerIP):
+                                PThread.outputPacket.clear()
+                                PThread.outputPacket[globalvar.DefaultServerIP] = Queue()
+                    elif packet.seqno == 0x4147:#old version
                         os.write(self.tfd, data)
-                    elif packet.seqno == 0x4148:#True packet And ZIp
-                        globalvar.NowIdentity = packet.id
-                        src = buf[12:16]
-                        globalvar.ClientIP = socket.inet_ntoa(src)
-                        #decoding zip
-                        try:
-                            data = icmp.deZipData(data)                        
-                            os.write(self.tfd, data)                                                    
-                        except:
-                            pass
+                        
 
 if __name__=="__main__":
-    opts = getopt.getopt(sys.argv[1:],"s:c:l:hd")
+    opts = getopt.getopt(sys.argv[1:],"s:c:l:p:")
     for opt,optarg in opts[0]:    
         if opt == "-l":
             globalvar.IFACE_IP = optarg
+        elif opt == "-p":
+            globalvar.Password = int(optarg)
+            if globalvar.Password>65530:
+                print 'Input password is too big!'
+                sys.exit(0)
     
-    tun = Tunnel()
-    tun.create()
-    print "Allocated interface %s" % (tun.tname)
-    tun.config(globalvar.IFACE_IP)
+    PThread.init()
+    globalvar.tun = Tunnel()
+    globalvar.tun.create()
+    print "Allocated interface %s" % (globalvar.tun.tname)
+    globalvar.tun.config(globalvar.IFACE_IP)
+    #init lock
+    globalvar.cond = threading.Condition()
+    PThread.StartThread()
     try:
-        tun.run()
-        #start CalCPU
-        ReadCPU.Run()
+        globalvar.tun.run()
     except KeyboardInterrupt:
-        tun.close()
+        PThread.close()
+        globalvar.tun.close()
+        sys.exit(0)
+        
+def testRun():
+    globalvar.IFACE_IP = '10.1.104.1/24'
+    globalvar.Password = 104
+    
+    PThread.init()
+    globalvar.tun = Tunnel()
+    globalvar.tun.create()
+    print "Allocated interface %s" % (globalvar.tun.tname)
+    globalvar.tun.config(globalvar.IFACE_IP)
+    #init lock
+    globalvar.cond = threading.Condition()
+    PThread.StartThread()
+    try:
+        globalvar.tun.run()
+    except KeyboardInterrupt:
+        PThread.close()
+        globalvar.tun.close()
         sys.exit(0)

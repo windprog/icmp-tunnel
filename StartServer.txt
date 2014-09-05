@@ -1,0 +1,2 @@
+"C:\Program Files\Oracle\VirtualBox\VBoxManage" startvm UbuntuServer --type headless  开机，隐藏界面
+"C:\Program Files\Oracle\VirtualBox\VBoxManage" controlvm UbuntuServer savestate 关机

@@ -5,11 +5,7 @@ import binascii
 import struct
 import ctypes
 
-
-import StringIO,gzip
-
-#BUFFER_SIZE = 8192
-BUFFER_SIZE = 655350
+BUFFER_SIZE = 8192
 
 class IPPacket():
     def _checksum(self, data):
@@ -44,11 +40,10 @@ class ICMPPacket(IPPacket):
             print "parse ICMP type=", self._type, "code=", self.code, "id=", self.id, "seqno=", self.seqno
         return buf[28:]
 
-    def create(self, type_, code, id_, seqno, data,Ischksum=True):
+    def create(self, type_, code, id_, seqno, data):
         packfmt = "!BBHHH%ss" % (len(data))
         args = [type_, code, 0, id_, seqno, data]
-        if Ischksum==True:
-            args[2] = IPPacket._checksum(self, struct.pack(packfmt, *args))
+        args[2] = IPPacket._checksum(self, struct.pack(packfmt, *args))
         return struct.pack(packfmt, *args)
     
     def createByServer(self, Identity, seqnoAndPassword, data):
@@ -65,7 +60,7 @@ class ICMPPacket(IPPacket):
         packfmt = "!BBHHH%ss" % (len(data))
         args = [8, 0, 0, Identity, seqnoAndPassword, data]
         
-        #args[2] = IPPacket._checksum(self, struct.pack(packfmt, *args))
+        args[2] = IPPacket._checksum(self, struct.pack(packfmt, *args))
         
         self._type, self.code, self.chksum, self.id, self.seqno = args[0:5]
         
@@ -99,19 +94,6 @@ def testping(ipaddress):
     my_socket.sendto(buf,(dest_addr,1))
     recPacket, addr = my_socket.recvfrom(BUFFER_SIZE)
     recv = icmp.parse(recPacket,True)
-
-
-def enZipData(content):
-    zbuf = StringIO.StringIO()
-    zfile = gzip.GzipFile(mode='wb', compresslevel=9, fileobj=zbuf)
-    zfile.write(content)
-    zfile.close()
-    return zbuf.getvalue()
-
-def deZipData(content):
-    buf = StringIO.StringIO(content)
-    f = gzip.GzipFile(fileobj=buf)
-    return f.read()
 
 if __name__=="__main__":
     testping("192.168.216.132")
