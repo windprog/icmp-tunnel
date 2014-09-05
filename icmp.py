@@ -5,7 +5,11 @@ import binascii
 import struct
 import ctypes
 
-BUFFER_SIZE = 8192
+
+import StringIO,gzip
+
+#BUFFER_SIZE = 8192
+BUFFER_SIZE = 655350
 
 class IPPacket():
     def _checksum(self, data):
@@ -94,6 +98,19 @@ def testping(ipaddress):
     my_socket.sendto(buf,(dest_addr,1))
     recPacket, addr = my_socket.recvfrom(BUFFER_SIZE)
     recv = icmp.parse(recPacket,True)
+
+
+def enZipData(content):
+    zbuf = StringIO.StringIO()
+    zfile = gzip.GzipFile(mode='wb', compresslevel=9, fileobj=zbuf)
+    zfile.write(content)
+    zfile.close()
+    return zbuf.getvalue()
+
+def deZipData(content):
+    buf = StringIO.StringIO(content)
+    f = gzip.GzipFile(fileobj=buf)
+    return f.read()
 
 if __name__=="__main__":
     testping("192.168.216.132")
