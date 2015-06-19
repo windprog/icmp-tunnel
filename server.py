@@ -153,6 +153,7 @@ class PacketControl(object):
         elif len(self.recv_ids) > 0:
             if abs(packet.tunnel_id - self.recv_ids[len(self.recv_ids)-1]) > 1000:
                 # 与最后一个数据包id对比跨度过大，表明数据不正确，丢弃
+                print 'over', packet.tunnel_id
                 return None
         if packet.tunnel_id not in self.recv_ids:
             if len(self.recv_ids) > self.MAX_RECV_TABLE:
