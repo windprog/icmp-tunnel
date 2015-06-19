@@ -100,49 +100,35 @@ class TunnelPacket(ICMPPacket):
         # 载入二进制数据或者创建空对象
         self.tunnel_id = None
         self.command_id = None
+        self.user_data = None
         super(TunnelPacket, self).__init__(buf)
 
     def loads(self, buf):
         # 载入二进制数据
-        IPPacket.loads(self, buf)
-        # self.tunnel_id为原来data字段的头两个字节
-        self.type, self.code, self.chksum, self.id, self.seqno, self.command_id, self.tunnel_id = struct.unpack("!BBHHHBL", buf[20:33])
-        # 从网卡中获取的数据
-        self._data = buf[33:]
+        ICMPPacket.loads(self, buf)
+        # 网卡中的数据
+        tun_data = self.data
+        # self.command_id 为头1个字节，self.tunnel_id为后四个字节
+        self.command_id, self.tunnel_id = struct.unpack("!BL", tun_data[:5])
+        self.user_data = tun_data[5:]
 
-    # 当command_id==0时 始终让_data为加密数据
+    # 任何时候_data均为加密数据，解密之后才有command_id
     data = property(lambda self: self.get_data(), lambda self, data: self.set_data(data))
 
     def get_data(self):
-        if self.command_id == 0:
-            return cipher.decrypt(self._data)
-        else:
-            return self._data
+        return cipher.decrypt(self._data)
 
     def set_data(self, data):
-        if self.command_id == 0:
-            self._data = cipher.encrypt(data)
-        else:
-            self._data = data
+        self._data = cipher.encrypt(data)
 
     @classmethod
     def create(cls, _type, code, _id, seqno, tunnel_id, data, command_id=0):
         # 创建对象
         pk = cls()
-        pk.type, pk.code, pk.id, pk.seqno, pk.tunnel_id, pk.command_id = \
-            _type, code, _id, seqno, tunnel_id, command_id
-        # 当command_id==0时 自动加密
-        pk.data = data
+        pk.type, pk.code, pk.id, pk.seqno, pk.tunnel_id, pk.user_data, pk.command_id = \
+            _type, code, _id, seqno, tunnel_id, data, command_id
+        pk.data = struct.pack("!BL%ss" % len(pk.user_data), pk.command_id, pk.tunnel_id, pk.user_data)
         return pk
-
-    def dumps(self):
-        cm_buffer = struct.pack("!BL", self.command_id, self.tunnel_id)
-        assert len(cm_buffer) == 5
-        real = cm_buffer + self._data
-        packfmt = "!BBHHH%ss" % (len(self._data))
-        args = [self.type, self.code, 0, self.id, self.seqno, self._data]
-        args[2] = IPPacket.checksum(struct.pack(packfmt, *args))
-        return struct.pack(packfmt, *args)
 
 
 class PacketControl(object):
@@ -185,8 +171,6 @@ class PacketControl(object):
 
     def send_pk(self, ipk):
         data = ipk.dumps()
-        # debug
-        p_data = copy.copy(ipk.data)
         try:
             self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
         except:
@@ -195,9 +179,9 @@ class PacketControl(object):
             try:
                 self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
             except:
-                print 'send command_id:%s len:%s content fail' % (ipk.command_id, len(p_data))
+                print 'send command_id:%s len:%s content fail' % (ipk.command_id, len(ipk.user_data))
                 return
-        print 'send command_id:%s len:%s content success' % (ipk.command_id, len(p_data))
+        print 'send command_id:%s len:%s content success' % (ipk.command_id, len(ipk.user_data))
 
     def send(self, buf):
         print 'accept data from tun len:%s' % len(buf)
@@ -230,7 +214,7 @@ class PacketControl(object):
 
     def parse_data(self, packet):
         assert isinstance(packet, TunnelPacket)
-        data = packet.data
+        data = packet.user_data
         if not data:
             print '无法解密或者无数据'
             return None
@@ -242,9 +226,7 @@ class PacketControl(object):
             if len(self.recv_ids) > self.MAX_RECV_TABLE:
                 self.recv_ids.pop(0)
             self.recv_ids.append(packet.tunnel_id)
-            # debug
-            p_data = copy.copy(packet.data)
-            print 'write to command_id:%s len:%s content' % (packet.command_id, len(p_data))
+            print 'write to command_id:%s len:%s content' % (packet.command_id, len(data))
             return data
         else:
             return None
@@ -253,14 +235,13 @@ class PacketControl(object):
         assert isinstance(packet, TunnelPacket)
         try:
             print 'parse_update_tunnel_id:'
-            self.remote_tunnel_id = long(packet.data.split(',')[0])
+            self.remote_tunnel_id = long(packet.user_data.split(',')[0])
         except:
             pass
 
     def recv(self):
         buf = self.tunnel.icmpfd.recv(2048)
         # debug
-        old_buf = copy.deepcopy(buf)
         print 'accept data from internet len:%s' % len(buf)
         packet = TunnelPacket(buf)
         if packet.seqno != 0x4147:  # True packet
@@ -272,14 +253,11 @@ class PacketControl(object):
             des_ip = packet.src
             self.tunnel.DesIp = des_ip
 
-        # debug
-        data = copy.copy(packet.data)
-        print 'recv command_id:%s len:%s content' % (packet.command_id, len(data))
+        print 'recv command_id:%s len:%s content' % (packet.command_id, len(packet.user_data))
         callback = self.COMMAND.get(packet.command_id)
         if callback:
             return callback(packet)
         else:
-            assert old_buf == buf
             return cipher.decrypt(buf[28:])
 
 

@@ -37,7 +37,7 @@ class MockServerTunnel(object):
             ip, port = ad
             pre = 'x'*12 + socket.inet_aton(CLIENT_IP if ip == SERVER_IP else SERVER_IP) + socket.inet_aton(ip)
             pk = TunnelPacket(pre + _str)
-            assert pk.data == 'some result' or 'server' in pk.data
+            assert pk.user_data == 'some result' or 'server' in pk.user_data
         setattr(self.icmpfd, 'sendto', lambda _str, ad: sendto(_str, ad))
 
     def get_recv_data(self):
@@ -53,7 +53,10 @@ class MockServerTunnel(object):
         ip_recv_data = 'x'*12 + socket.inet_aton(SERVER_IP) + socket.inet_aton(CLIENT_IP)
         IPPacket.loads(self.recv_pk, ip_recv_data)
         recv_data = ip_recv_data + self.recv_pk.dumps()
-        assert len(recv_data) == 20 + 8 + 1 + 4 + len(cipher.encrypt('some result'))
+        import struct
+        assert len(recv_data) == 20 + 8 + len(cipher.encrypt((
+            struct.pack("!BL%ss" % len('some result'), 0, self.testcase.tunnel_id, 'some result')
+        )))
         return recv_data
 
 

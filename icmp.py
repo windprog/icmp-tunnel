@@ -56,8 +56,9 @@ class ICMPPacket(IPPacket):
         super(ICMPPacket, self).__init__(buf)
 
     def loads(self, buf):
-        super(ICMPPacket, self).loads(buf)
+        IPPacket.loads(self, buf)
         self.type, self.code, self.chksum, self.id, self.seqno = struct.unpack("!BBHHH", buf[20:28])
+        # 从网卡中获取的数据
         self._data = buf[28:]
 
     @classmethod
