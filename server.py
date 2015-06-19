@@ -165,7 +165,15 @@ class PacketControl(object):
         if buf is None:
             return
         ipk = TunnelPacket.create(
-            self.tunnel.icmp_type, 0, self.tunnel.now_icmp_identity, 0x4147, self.get_send_id(), buf).dumps()
+            _type=self.tunnel.icmp_type,
+            code=0,
+            _id=self.tunnel.now_icmp_identity,
+            seqno=0x4147,
+            tunnel_id=self.get_send_id(), # 当前的tunnel id
+            data=buf,
+            command_id=0,  # 更新tunnel id
+        ).dumps()
+        print 'sending data len: ', len(buf)
         for _ in xrange(2):
             self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
