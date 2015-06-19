@@ -154,7 +154,6 @@ class PacketControl(object):
             if abs(packet.tunnel_id - self.recv_ids[len(self.recv_ids)-1]) > 1000:
                 # 与最后一个数据包id对比跨度过大，表明数据不正确，丢弃
                 return None
-        print packet.tunnel_id
         if packet.tunnel_id not in self.recv_ids:
             if len(self.recv_ids) > self.MAX_RECV_TABLE:
                 self.recv_ids.pop(0)
@@ -220,6 +219,7 @@ class Tunnel(object):
                         if self.is_server:
                             des_ip = socket.inet_ntoa(packet.src)
                             self.DesIp = des_ip
+                        print packet.tunnel_id
                         self.tunfd.write(data)
                 except Exception, e:
                     print e
