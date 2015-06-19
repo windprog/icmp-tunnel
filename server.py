@@ -20,7 +20,7 @@ import socket
 import struct
 import sys
 import time
-from icmp import ICMPPacket
+from icmp import ICMPPacket, IPPacket
 import sys
 
 CLIENT_ICMP_TYPE = 8
@@ -87,6 +87,10 @@ class AESCipher:
             ret = None
         return ret
 
+
+cipher = AESCipher(PASSWORD)
+
+
 class TunnelPacket(ICMPPacket):
     def __init__(self, buf=None):
         self.tunnel_id = None
@@ -94,23 +98,42 @@ class TunnelPacket(ICMPPacket):
         super(TunnelPacket, self).__init__(buf)
 
     def loads(self, buf):
-        super(ICMPPacket, self).loads(buf)
+        IPPacket.loads(self, buf)
         # self.tunnel_id为原来data字段的头两个字节
         self.type, self.code, self.chksum, self.id, self.seqno, self.command_id, self.tunnel_id = struct.unpack("!BBHHHBL", buf[20:33])
-        self.data = buf[33:]
+        raw = buf[33:]
+        # 从网卡中获取的数据
+        self.data = raw
+
+    # 当command_id==0时 始终让_data为加密数据
+    data = property(lambda self: self.get_data(), lambda self, data: self.set_data(data))
+
+    def get_data(self):
+        if self.command_id == 0:
+            return cipher.decrypt(self._data)
+        else:
+            return self._data
+
+    def set_data(self, data):
+        if self.command_id == 0:
+            self._data = cipher.encrypt(data)
+        else:
+            self._data = data
 
     @classmethod
     def create(cls, _type, code, _id, seqno, tunnel_id, data, command_id=0):
         pk = cls()
+        # 当command_id==0时 自动加密
         pk.type, pk.code, pk.id, pk.seqno, pk.tunnel_id, pk.command_id, pk.data = \
             _type, code, _id, seqno, tunnel_id, command_id, data
         return pk
 
     def dumps(self):
-        packfmt = "!BBHHHBL%ss" % (len(self.data))
-        args = [self.type, self.code, 0, self.id, self.seqno, self.command_id, self.tunnel_id, self.data]
+        packfmt = "!BBHHHBL%ss" % (len(self._data))
+        args = [self.type, self.code, 0, self.id, self.seqno, self.command_id, self.tunnel_id, self._data]
         args[2] = ICMPPacket.checksum(struct.pack(packfmt, *args))
         return struct.pack(packfmt, *args)
+
 
 class PacketControl(object):
     MAX_RECV_TABLE = 100000
@@ -122,13 +145,13 @@ class PacketControl(object):
         self.local_tunnel_id = long(0)
         self.remote_tunnel_id = long(0)  # 3秒更新一次
         self.recv_ids = []
-        self.cipher = AESCipher(PASSWORD)
+
         self.last_update_tunnel = None
 
         self.max_packet_count_peer_sec = (1024*1024*1000 / 8) / 1000  # "每个数据包1000字节 跑满千兆网卡" 每秒 数据包数
 
         self.COMMAND = {
-            0: self.parse_data,
+            0: self.parse_data,  # 已加密的正常数据
             1: self.parse_update_tunnel_id,
         }
 
@@ -150,7 +173,7 @@ class PacketControl(object):
             data=",".join([str(self.local_tunnel_id), cm]),
             command_id=1,  # 更新tunnel id
         ).dumps()
-        print cm
+        print 'send_update_tunnel_id : ', ",".join([str(self.local_tunnel_id), cm])
         self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
     def send(self, buf):
@@ -161,7 +184,6 @@ class PacketControl(object):
             self.send_update_tunnel_id()
             self.last_update_tunnel = time.time()
 
-        buf = self.cipher.encrypt(buf)
         if buf is None:
             return
         ipk = TunnelPacket.create(
@@ -178,8 +200,10 @@ class PacketControl(object):
             self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
     def parse_data(self, packet):
-        packet.data = self.cipher.decrypt(packet.data)
-        if not packet.data:
+        assert isinstance(packet, TunnelPacket)
+        data = packet.data
+        if not data:
+            print '无法解密或者无数据'
             return None
         if abs(packet.tunnel_id - self.remote_tunnel_id) > self.max_packet_count_peer_sec:
             # 错误的数据包
@@ -189,15 +213,14 @@ class PacketControl(object):
             if len(self.recv_ids) > self.MAX_RECV_TABLE:
                 self.recv_ids.pop(0)
             self.recv_ids.append(packet.tunnel_id)
-            # 无论正常不正常都写入网卡
-            return packet
+            return data
         else:
             return None
 
     def parse_update_tunnel_id(self, packet):
         assert isinstance(packet, TunnelPacket)
         try:
-            print packet.data
+            print 'parse_update_tunnel_id:', packet.data
             self.remote_tunnel_id = long(packet.data.split(',')[0])
         except:
             pass
@@ -207,7 +230,15 @@ class PacketControl(object):
         packet = TunnelPacket(buf)
         if packet.seqno != 0x4147:  # True packet
             return None
-        print 'accept len:%s data:%s' % (len(packet.data), packet.data[:10].replace('\n', ''))
+
+        # 维持icmp 通道
+        self.tunnel.now_icmp_identity = packet.id
+        if self.tunnel.is_server:
+            des_ip = socket.inet_ntoa(packet.src)
+            self.tunnel.DesIp = des_ip
+
+        data = packet.data
+        print 'recv len:%s data:%s' % (len(data), data[:10].replace('\n', ''))
         callback = self.COMMAND.get(packet.command_id)
         if callback:
             return callback(packet)
@@ -261,16 +292,10 @@ class Tunnel(object):
                         buf = self.tunfd.read(2048)
                         self.control.send(buf)
                     elif fileno == self.icmpfd.fileno():
-                        packet = self.control.recv()
-                        if not packet:
-                            continue
-                        data = packet.data
-                        self.now_icmp_identity = packet.id
-                        if self.is_server:
-                            des_ip = socket.inet_ntoa(packet.src)
-                            self.DesIp = des_ip
-                        print packet.tunnel_id
-                        self.tunfd.write(data)
+                        data = self.control.recv()
+                        if data:
+                            # 写入网卡
+                            self.tunfd.write(data)
                 except Exception, e:
                     print e
 

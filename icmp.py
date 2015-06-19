@@ -46,22 +46,22 @@ class IPPacket(object):
 class ICMPPacket(IPPacket):
     def __init__(self, buf=None):
         self.type, self.code, self.chksum, self.id, self.seqno = [None for _ in range(5)]
-        self.data = ""
+        self._data = ""
         super(ICMPPacket, self).__init__(buf)
 
     def loads(self, buf):
         super(ICMPPacket, self).loads(buf)
         self.type, self.code, self.chksum, self.id, self.seqno = struct.unpack("!BBHHH", buf[20:28])
-        self.data = buf[28:]
+        self._data = buf[28:]
 
     @classmethod
     def create(cls, _type, code, _id, seqno, data):
         pk = cls()
-        pk.type, pk.code, pk.id, pk.seqno, pk.data = _type, code, _id, seqno, data
+        pk.type, pk.code, pk.id, pk.seqno, pk._data = _type, code, _id, seqno, data
         return pk
 
     def dumps(self):
-        packfmt = "!BBHHH%ss" % (len(self.data))
-        args = [self.type, self.code, 0, self.id, self.seqno, self.data]
+        packfmt = "!BBHHH%ss" % (len(self._data))
+        args = [self.type, self.code, 0, self.id, self.seqno, self._data]
         args[2] = IPPacket.checksum(struct.pack(packfmt, *args))
         return struct.pack(packfmt, *args)
