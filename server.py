@@ -189,10 +189,10 @@ class PacketControl(object):
             data=",".join([str(self.local_tunnel_id), cm]),
             command_id=1,  # 更新tunnel id
         )
-        self.send_pk(ipk)
-
-    def send_pk(self, ipk):
         data = ipk.dumps()
+        self.send_pk(data)
+
+    def send_pk(self, data):
         try:
             self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
         except:
@@ -223,8 +223,9 @@ class PacketControl(object):
             data=buf,
             command_id=0,  # 更新tunnel id
         )
-        for _ in xrange(2):
-            self.send_pk(ipk)
+        data = ipk.dumps()
+        for _ in xrange(1):
+            self.send_pk(data)
 
     def parse_data(self, packet):
         assert isinstance(packet, TunnelPacket)
