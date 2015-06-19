@@ -18,7 +18,7 @@ BUFFER_SIZE = 8192
 class IPPacket(object):
     def __init__(self, buf=None):
         # des:socket.inet_ntoa(self.dst)
-        self.ttl, self.proto, self.chksum, self._src, self._dst = [None for _ in range(5)]
+        self.ttl, self.proto, self.chksum, self._src, self._dst = [0 for _ in range(5)]
         if buf:
             self.loads(buf)
 
@@ -51,7 +51,7 @@ class IPPacket(object):
 
 class ICMPPacket(IPPacket):
     def __init__(self, buf=None):
-        self.type, self.code, self.chksum, self.id, self.seqno = [None for _ in range(5)]
+        self.type, self.code, self.chksum, self.id, self.seqno = [0 for _ in range(5)]
         self._data = ""
         super(ICMPPacket, self).__init__(buf)
 

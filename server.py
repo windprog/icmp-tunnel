@@ -21,6 +21,7 @@ import sys
 import time
 from icmp import ICMPPacket, IPPacket
 import sys
+import copy
 try:
     import pytun
 except:
@@ -137,7 +138,7 @@ class TunnelPacket(ICMPPacket):
     def dumps(self):
         packfmt = "!BBHHHBL%ss" % (len(self._data))
         args = [self.type, self.code, 0, self.id, self.seqno, self.command_id, self.tunnel_id, self._data]
-        args[2] = ICMPPacket.checksum(struct.pack(packfmt, *args))
+        args[2] = IPPacket.checksum(struct.pack(packfmt, *args))
         return struct.pack(packfmt, *args)
 
 
@@ -181,6 +182,8 @@ class PacketControl(object):
 
     def send_pk(self, ipk):
         data = ipk.dumps()
+        # debug
+        p_data = copy.copy(ipk.data)
         try:
             self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
         except:
@@ -189,9 +192,9 @@ class PacketControl(object):
             try:
                 self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
             except:
-                print 'send command_id:%s len:%s content:%s fail' % (ipk.command_id, len(ipk.data), ipk.data[:20].replace('\n', ''))
+                print 'send command_id:%s len:%s content:%s fail' % (ipk.command_id, len(p_data), p_data[:20].replace('\n', ''))
                 return
-        print 'send command_id:%s len:%s content:%s success' % (ipk.command_id, len(ipk.data), ipk.data[:20].replace('\n', ''))
+        print 'send command_id:%s len:%s content:%s success' % (p_data, len(p_data), p_data[:20].replace('\n', ''))
 
     def send(self, buf):
         print 'accept data from tun len:%s' % len(buf)
@@ -228,7 +231,9 @@ class PacketControl(object):
             if len(self.recv_ids) > self.MAX_RECV_TABLE:
                 self.recv_ids.pop(0)
             self.recv_ids.append(packet.tunnel_id)
-            print 'write to command_id:%s len:%s content:%s' % (packet.command_id, len(data), data[:10].replace('\n', ''))
+            # debug
+            p_data = copy.copy(packet.data)
+            print 'write to command_id:%s len:%s content:%s' % (packet.command_id, len(p_data), p_data[:10].replace('\n', ''))
             return data
         else:
             return None
@@ -243,6 +248,8 @@ class PacketControl(object):
 
     def recv(self):
         buf = self.tunnel.icmpfd.recv(2048)
+        # debug
+        old_buf = copy.deepcopy(buf)
         print 'accept data from internet len:%s' % len(buf)
         packet = TunnelPacket(buf)
         if packet.seqno != 0x4147:  # True packet
@@ -254,12 +261,14 @@ class PacketControl(object):
             des_ip = packet.src
             self.tunnel.DesIp = des_ip
 
-        data = packet.data
+        # debug
+        data = copy.copy(packet.data)
         print 'recv command_id:%s len:%s content:%s' % (packet.command_id, len(data), data[:10].replace('\n', ''))
         callback = self.COMMAND.get(packet.command_id)
         if callback:
             return callback(packet)
         else:
+            assert old_buf == buf
             return buf
 
 
