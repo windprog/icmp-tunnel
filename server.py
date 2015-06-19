@@ -23,8 +23,8 @@ import time
 from icmp import ICMPPacket
 import sys
 
-CLIENT_ICMP_CODE = 8
-SERVER_ICMP_CODE = 0
+CLIENT_ICMP_TYPE = 8
+SERVER_ICMP_TYPE = 0
 PASSWORD = 'password'
 
 
@@ -104,9 +104,9 @@ class Tunnel(object):
 
         self.NowIdentity = 0xffff
         if is_server:
-            self.code = SERVER_ICMP_CODE
+            self.icmp_type = SERVER_ICMP_TYPE
         else:
-            self.code = CLIENT_ICMP_CODE
+            self.icmp_type = CLIENT_ICMP_TYPE
         if is_server:
             print 'server ip:10.8.0.1 dev:stun finish'
             try:
@@ -135,7 +135,7 @@ class Tunnel(object):
                     buf = self.cipher.encrypt(buf)
                     if buf is None:
                         continue
-                    ipk = ICMPPacket.create(self.code, 0, self.NowIdentity, 0x4147, buf).dumps()
+                    ipk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, 0x4147, buf).dumps()
                     self.icmpfd.sendto(ipk, (self.DesIp, 22))
                 elif fileno == self.icmpfd.fileno():
                     buf = self.icmpfd.recv(2048)
