@@ -109,8 +109,9 @@ class TunnelPacket(ICMPPacket):
         # 网卡中的数据
         tun_data = self.data
         # self.command_id 为头1个字节，self.tunnel_id为后四个字节
-        self.command_id, self.tunnel_id = struct.unpack("!BL", tun_data[:5])
-        self.user_data = tun_data[5:]
+        if tun_data and len(tun_data) > 5:
+            self.command_id, self.tunnel_id = struct.unpack("!BL", tun_data[:5])
+            self.user_data = tun_data[5:]
 
     # 任何时候_data均为加密数据，解密之后才有command_id
     data = property(lambda self: self.get_data(), lambda self, data: self.set_data(data))
@@ -252,6 +253,9 @@ class PacketControl(object):
         if self.tunnel.is_server:
             des_ip = packet.src
             self.tunnel.DesIp = des_ip
+
+        if not packet.user_data:
+            return None
 
         print 'recv command_id:%s len:%s content' % (packet.command_id, len(packet.user_data))
         callback = self.COMMAND.get(packet.command_id)
