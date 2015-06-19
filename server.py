@@ -193,7 +193,6 @@ class PacketControl(object):
                 print 'send too fast lost one packet'
 
     def send(self, buf):
-        # print 'server' if self.tunnel.is_server else 'client'
         if not self.last_update_tunnel or (time.time() - self.last_update_tunnel) >= 3.0:
             # 第一次运行或者距离上一次发送大于等于3秒，发送本地tunnel id
             print 'what the fuck to send update'
@@ -227,6 +226,7 @@ class PacketControl(object):
             if len(self.recv_ids) > self.MAX_RECV_TABLE:
                 self.recv_ids.pop(0)
             self.recv_ids.append(packet.tunnel_id)
+            print 'write to command_id:%s len:%s content:%s' % (packet.command_id, len(data), data[:10].replace('\n', ''))
             return data
         else:
             return None
