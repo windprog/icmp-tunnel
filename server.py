@@ -145,20 +145,18 @@ class PacketControl(object):
         packet.data = self.cipher.decrypt(packet.data)
         if not packet.data:
             return None
-        if packet.tunnel_id <= 100:
-            # 前100个数据包
-            if len(self.recv_ids) == self.MAX_RECV_TABLE:
-                # 满了并且id小于100，可能的情况为：客户端重启 或 id重置
+        if packet.tunnel_id <= 10:
+            # 前10个数据包
+            if len(self.recv_ids) > 10:
+                # 可能的情况为：客户端重启 或 id重置
                 self.recv_ids = list()
-        elif len(self.recv_ids) > 0:
-            if abs(packet.tunnel_id - self.recv_ids[len(self.recv_ids)-1]) > 1000:
-                # 与最后一个数据包id对比跨度过大，表明数据不正确，丢弃
-                print 'over', packet.tunnel_id
-                return None
         if packet.tunnel_id not in self.recv_ids:
-            if len(self.recv_ids) > self.MAX_RECV_TABLE:
-                self.recv_ids.pop(0)
-            self.recv_ids.append(packet.tunnel_id)
+            if abs(packet.tunnel_id - self.recv_ids[len(self.recv_ids)-1]) <= 1000:
+                # 正常跨度下的id添加
+                if len(self.recv_ids) > self.MAX_RECV_TABLE:
+                    self.recv_ids.pop(0)
+                self.recv_ids.append(packet.tunnel_id)
+            # 无论正常不正常都写入网卡
             return packet
         else:
             return None
