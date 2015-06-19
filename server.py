@@ -13,7 +13,6 @@ from Crypto import Random
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 import json
-import pytun
 import random
 import select
 import socket
@@ -22,6 +21,10 @@ import sys
 import time
 from icmp import ICMPPacket, IPPacket
 import sys
+try:
+    import pytun
+except:
+    pass
 
 CLIENT_ICMP_TYPE = 8
 SERVER_ICMP_TYPE = 0
@@ -93,17 +96,18 @@ cipher = AESCipher(PASSWORD)
 
 class TunnelPacket(ICMPPacket):
     def __init__(self, buf=None):
+        # 载入二进制数据或者创建空对象
         self.tunnel_id = None
         self.command_id = None
         super(TunnelPacket, self).__init__(buf)
 
     def loads(self, buf):
+        # 载入二进制数据
         IPPacket.loads(self, buf)
         # self.tunnel_id为原来data字段的头两个字节
         self.type, self.code, self.chksum, self.id, self.seqno, self.command_id, self.tunnel_id = struct.unpack("!BBHHHBL", buf[20:33])
-        raw = buf[33:]
         # 从网卡中获取的数据
-        self.data = raw
+        self._data = buf[33:]
 
     # 当command_id==0时 始终让_data为加密数据
     data = property(lambda self: self.get_data(), lambda self, data: self.set_data(data))
@@ -122,6 +126,7 @@ class TunnelPacket(ICMPPacket):
 
     @classmethod
     def create(cls, _type, code, _id, seqno, tunnel_id, data, command_id=0):
+        # 创建对象
         pk = cls()
         pk.type, pk.code, pk.id, pk.seqno, pk.tunnel_id, pk.command_id = \
             _type, code, _id, seqno, tunnel_id, command_id
@@ -141,8 +146,6 @@ class PacketControl(object):
 
     def __init__(self, tunnel):
         self.tunnel = tunnel
-        assert isinstance(self.tunnel, Tunnel)
-        self.builder_class = ICMPPacket
         self.local_tunnel_id = long(0)
         self.remote_tunnel_id = long(0)  # 3秒更新一次
         self.recv_ids = []
@@ -237,7 +240,7 @@ class PacketControl(object):
         # 维持icmp 通道
         self.tunnel.now_icmp_identity = packet.id
         if self.tunnel.is_server:
-            des_ip = socket.inet_ntoa(packet.src)
+            des_ip = packet.src
             self.tunnel.DesIp = des_ip
 
         data = packet.data
