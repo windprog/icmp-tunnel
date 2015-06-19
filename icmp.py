@@ -45,7 +45,8 @@ class IPPacket(object):
 
 class ICMPPacket(IPPacket):
     def __init__(self, buf=None):
-        self.type, self.code, self.chksum, self.id, self.seqno, self.data = [None for _ in range(6)]
+        self.type, self.code, self.chksum, self.id, self.seqno = [None for _ in range(5)]
+        self.data = ""
         super(ICMPPacket, self).__init__(buf)
 
     def loads(self, buf):
