@@ -153,6 +153,7 @@ class PacketControl(object):
         self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
     def send(self, buf):
+        print 'server' if self.tunnel.is_server else 'client'
         if not self.last_update_tunnel or (time.time() - self.last_update_tunnel) >= 3.0:
             # 第一次运行或者距离上一次发送大于等于3秒，发送本地tunnel id
             self.send_update_tunnel_id()
