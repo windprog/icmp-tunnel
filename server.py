@@ -149,6 +149,7 @@ class PacketControl(object):
             data=",".join([str(self.local_tunnel_id), 'server' if self.tunnel.is_server else 'client']),
             command_id=1,  # 更新tunnel id
         ).dumps()
+        print 'server' if self.tunnel.is_server else 'client'
         self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
     def send(self, buf):
