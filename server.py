@@ -111,6 +111,8 @@ class TunnelPacket(ICMPPacket):
         return struct.pack(packfmt, *args)
 
 class PacketControl(object):
+    MAX_RECV_TABLE = 100000
+
     def __init__(self, tunnel):
         self.tunnel = tunnel
         assert isinstance(self.tunnel, Tunnel)
@@ -120,7 +122,7 @@ class PacketControl(object):
         self.cipher = AESCipher(PASSWORD)
 
     def get_send_id(self):
-        # 获取自增id
+        # 获取自增id, 第一次发出为1
         self.now_send_id += 1
         if self.now_send_id >= sys.maxint:
             self.now_send_id = long(1)
@@ -143,19 +145,17 @@ class PacketControl(object):
         packet.data = self.cipher.decrypt(packet.data)
         if not packet.data:
             return None
-        if packet.tunnel_id <= 1:
-            if len(self.recv_ids) == 1 and self.recv_ids[0] == 1:
-                # 上次已重新初始化
-                pass
-            else:
-                # id用完，重新初始化接收表
+        if packet.tunnel_id <= 100:
+            # 前100个数据包
+            if len(self.recv_ids) == self.MAX_RECV_TABLE:
+                # 满了并且id小于100，可能的情况为：客户端重启 或 id重置
                 self.recv_ids = list()
         elif len(self.recv_ids) > 0:
             if abs(packet.tunnel_id - self.recv_ids[len(self.recv_ids)-1]) > 1000:
                 # 与最后一个数据包id对比跨度过大，表明数据不正确，丢弃
                 return None
         if packet.tunnel_id not in self.recv_ids:
-            if len(self.recv_ids) > 100000:
+            if len(self.recv_ids) > self.MAX_RECV_TABLE:
                 self.recv_ids.pop(0)
             self.recv_ids.append(packet.tunnel_id)
             return packet
