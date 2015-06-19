@@ -192,9 +192,9 @@ class PacketControl(object):
             try:
                 self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
             except:
-                print 'send command_id:%s len:%s content:%s fail' % (ipk.command_id, len(p_data), p_data[:20].replace('\n', ''))
+                print 'send command_id:%s len:%s content fail' % (ipk.command_id, len(p_data))
                 return
-        print 'send command_id:%s len:%s content:%s success' % (p_data, len(p_data), p_data[:20].replace('\n', ''))
+        print 'send command_id:%s len:%s content success' % (p_data, len(p_data))
 
     def send(self, buf):
         print 'accept data from tun len:%s' % len(buf)
@@ -233,7 +233,7 @@ class PacketControl(object):
             self.recv_ids.append(packet.tunnel_id)
             # debug
             p_data = copy.copy(packet.data)
-            print 'write to command_id:%s len:%s content:%s' % (packet.command_id, len(p_data), p_data[:10].replace('\n', ''))
+            print 'write to command_id:%s len:%s content' % (packet.command_id, len(p_data))
             return data
         else:
             return None
@@ -263,7 +263,7 @@ class PacketControl(object):
 
         # debug
         data = copy.copy(packet.data)
-        print 'recv command_id:%s len:%s content:%s' % (packet.command_id, len(data), data[:10].replace('\n', ''))
+        print 'recv command_id:%s len:%s content' % (packet.command_id, len(data))
         callback = self.COMMAND.get(packet.command_id)
         if callback:
             return callback(packet)
