@@ -215,6 +215,14 @@ class PacketControl(object):
             data=buf,
             command_id=0,  # 更新tunnel id
         )
+        print 'sending', dict(
+            _type=self.tunnel.icmp_type,
+            code=0,
+            _id=self.tunnel.now_icmp_identity,
+            seqno=0x4147,
+            tunnel_id=ipk.tunnel_id, # 当前的tunnel id
+            command_id=0,  # 更新tunnel id
+        )
         self.send_pk(ipk)
 
     def parse_data(self, packet):
