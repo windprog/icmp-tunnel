@@ -137,6 +137,7 @@ class PacketControl(object):
     def recv(self):
         buf = self.tunnel.icmpfd.recv(2048)
         packet = TunnelPacket(buf)
+        print packet.tunnel_id
         packet.data = self.cipher.decrypt(packet.data)
         if packet.seqno != 0x4147:  # True packet
             return None
