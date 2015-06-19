@@ -90,6 +90,9 @@ class AESCipher:
 
 class Tunnel(object):
     def __init__(self, is_server, des_ip=None):
+        self.is_server = is_server
+        self.DesIp = des_ip
+
         self.epoll = select.epoll()
 
         self.icmpfd = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname("icmp"))
@@ -100,8 +103,6 @@ class Tunnel(object):
         self.cipher = AESCipher(PASSWORD)
 
         self.NowIdentity = 0xffff
-        self.DesIp = des_ip
-        self.is_server = is_server
         if is_server:
             self.code = SERVER_ICMP_CODE
         else:
