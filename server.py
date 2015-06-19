@@ -248,7 +248,7 @@ class PacketControl(object):
         print 'accept data from internet len:%s' % len(buf)
         packet = TunnelPacket(buf)
 
-        if self.command_id is None:
+        if packet.command_id is None:
             return None
 
         # 维持icmp 通道
