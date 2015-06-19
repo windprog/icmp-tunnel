@@ -131,15 +131,15 @@ class PacketControl(object):
             return
         ipk = TunnelPacket.create(
             self.tunnel.icmp_type, 0, self.tunnel.now_icmp_identity, 0x4147, self.get_send_id(), buf).dumps()
-        for _ in range(2):
+        for _ in xrange(2):
             self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
     def recv(self):
         buf = self.tunnel.icmpfd.recv(2048)
         packet = TunnelPacket(buf)
-        packet.data = self.cipher.decrypt(packet.data)
         if packet.seqno != 0x4147:  # True packet
             return None
+        packet.data = self.cipher.decrypt(packet.data)
         print packet.tunnel_id
         if not packet.data:
             return None
