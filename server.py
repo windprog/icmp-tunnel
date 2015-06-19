@@ -123,9 +123,10 @@ class TunnelPacket(ICMPPacket):
     @classmethod
     def create(cls, _type, code, _id, seqno, tunnel_id, data, command_id=0):
         pk = cls()
+        pk.type, pk.code, pk.id, pk.seqno, pk.tunnel_id, pk.command_id = \
+            _type, code, _id, seqno, tunnel_id, command_id
         # 当command_id==0时 自动加密
-        pk.type, pk.code, pk.id, pk.seqno, pk.tunnel_id, pk.command_id, pk.data = \
-            _type, code, _id, seqno, tunnel_id, command_id, data
+        pk.data = data
         return pk
 
     def dumps(self):
@@ -172,9 +173,10 @@ class PacketControl(object):
             tunnel_id=0,  # 这个随意一个数字都可以，在这里只是占位
             data=",".join([str(self.local_tunnel_id), cm]),
             command_id=1,  # 更新tunnel id
-        ).dumps()
-        print 'send_update_tunnel_id : ', ",".join([str(self.local_tunnel_id), cm])
-        self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
+        )
+        data = ipk.dumps()
+        print 'send command_id:%s len:%s content:%s' % (ipk.command_id, len(ipk.data), ipk.data[:20].replace('\n', ''))
+        self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
 
     def send(self, buf):
         # print 'server' if self.tunnel.is_server else 'client'
@@ -194,10 +196,11 @@ class PacketControl(object):
             tunnel_id=self.get_send_id(), # 当前的tunnel id
             data=buf,
             command_id=0,  # 更新tunnel id
-        ).dumps()
-        print 'sending data len: ', len(buf)
+        )
+        data = ipk.dumps()
+        print 'send command_id:%s len:%s content:%s' % (ipk.command_id, len(ipk.data), ipk.data[:10].replace('\n', ''))
         for _ in xrange(2):
-            self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
+            self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
 
     def parse_data(self, packet):
         assert isinstance(packet, TunnelPacket)
@@ -238,7 +241,7 @@ class PacketControl(object):
             self.tunnel.DesIp = des_ip
 
         data = packet.data
-        print 'recv len:%s data:%s' % (len(data), data[:10].replace('\n', ''))
+        print 'recv command_id:%s len:%s content:%s' % (packet.command_id, len(data), data[:10].replace('\n', ''))
         callback = self.COMMAND.get(packet.command_id)
         if callback:
             return callback(packet)
