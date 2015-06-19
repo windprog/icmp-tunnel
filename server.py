@@ -107,8 +107,9 @@ class TunnelPacket(ICMPPacket):
         # 载入二进制数据
         ICMPPacket.loads(self, buf)
         # 网卡中的数据
-        if not self._data:
-            return
+        if self.seqno != 0x4147 or not self._data:  # True packet
+            return None
+
         tun_data = self.data
         # self.command_id 为头1个字节，self.tunnel_id为后四个字节
         if tun_data and len(tun_data) > 5:
@@ -246,7 +247,8 @@ class PacketControl(object):
         # debug
         print 'accept data from internet len:%s' % len(buf)
         packet = TunnelPacket(buf)
-        if packet.seqno != 0x4147:  # True packet
+
+        if self.command_id is None:
             return None
 
         # 维持icmp 通道
@@ -254,9 +256,6 @@ class PacketControl(object):
         if self.tunnel.is_server:
             des_ip = packet.src
             self.tunnel.DesIp = des_ip
-
-        if not packet.user_data:
-            return None
 
         print 'recv command_id:%s len:%s content' % (packet.command_id, len(packet.user_data))
         callback = self.COMMAND.get(packet.command_id)
