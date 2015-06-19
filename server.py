@@ -269,7 +269,7 @@ class PacketControl(object):
             return callback(packet)
         else:
             assert old_buf == buf
-            return buf
+            return cipher.decrypt(buf[28:])
 
 
 class Tunnel(object):
@@ -317,13 +317,14 @@ class Tunnel(object):
                 try:
                     # 保证持续运行
                     if fileno == self.tunfd.fileno():
-                        f
+                        print 'new'
                         buf = self.tunfd.read(2048)
                         self.control.send(buf)
                     elif fileno == self.icmpfd.fileno():
                         data = self.control.recv()
                         if data:
                             # 写入网卡
+                            print 'write tun'
                             self.tunfd.write(data)
                 except Exception, e:
                     print e
