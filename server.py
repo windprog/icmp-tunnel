@@ -90,23 +90,25 @@ class AESCipher:
 class TunnelPacket(ICMPPacket):
     def __init__(self, buf=None):
         self.tunnel_id = None
+        self.command_id = None
         super(TunnelPacket, self).__init__(buf)
 
     def loads(self, buf):
         super(ICMPPacket, self).loads(buf)
         # self.tunnel_id为原来data字段的头两个字节
-        self.type, self.code, self.chksum, self.id, self.seqno, self.tunnel_id = struct.unpack("!BBHHHL", buf[20:32])
-        self.data = buf[32:]
+        self.type, self.code, self.chksum, self.id, self.seqno, self.command_id, self.tunnel_id = struct.unpack("!BBHHHBL", buf[20:33])
+        self.data = buf[33:]
 
     @classmethod
-    def create(cls, _type, code, _id, seqno, tunnel_id, data):
+    def create(cls, _type, code, _id, seqno, tunnel_id, data, command_id=0):
         pk = cls()
-        pk.type, pk.code, pk.id, pk.seqno, pk.tunnel_id, pk.data = _type, code, _id, seqno, tunnel_id, data
+        pk.type, pk.code, pk.id, pk.seqno, pk.tunnel_id, pk.command_id, pk.data = \
+            _type, code, _id, seqno, tunnel_id, command_id, data
         return pk
 
     def dumps(self):
-        packfmt = "!BBHHHL%ss" % (len(self.data))
-        args = [self.type, self.code, 0, self.id, self.seqno, self.tunnel_id, self.data]
+        packfmt = "!BBHHHBL%ss" % (len(self.data))
+        args = [self.type, self.code, 0, self.id, self.seqno, self.command_id, self.tunnel_id, self.data]
         args[2] = ICMPPacket.checksum(struct.pack(packfmt, *args))
         return struct.pack(packfmt, *args)
 
@@ -117,18 +119,44 @@ class PacketControl(object):
         self.tunnel = tunnel
         assert isinstance(self.tunnel, Tunnel)
         self.builder_class = ICMPPacket
-        self.now_send_id = long(0)
+        self.local_tunnel_id = long(0)
+        self.remote_tunnel_id = long(0)  # 3秒更新一次
         self.recv_ids = []
         self.cipher = AESCipher(PASSWORD)
+        self.last_update_tunnel = None
+
+        self.max_packet_count_peer_sec = (1024*1024*1000 / 8) / 1000  # "每个数据包1000字节 跑满千兆网卡" 每秒 数据包数
+
+        self.COMMAND = {
+            0: self.parse_data,
+            1: self.parse_update_tunnel_id,
+        }
 
     def get_send_id(self):
         # 获取自增id, 第一次发出为1
-        self.now_send_id += 1
-        if self.now_send_id >= sys.maxint:
-            self.now_send_id = long(1)
-        return self.now_send_id
+        self.local_tunnel_id += 1
+        if self.local_tunnel_id >= sys.maxint:
+            self.local_tunnel_id = long(1)
+        return self.local_tunnel_id
+
+    def send_update_tunnel_id(self):
+        ipk = TunnelPacket.create(
+            _type=self.tunnel.icmp_type,
+            code=0,
+            _id=self.tunnel.now_icmp_identity,
+            seqno=0x4147,
+            tunnel_id=0,  # 这个随意一个数字都可以，在这里只是占位
+            data=",".join([str(self.local_tunnel_id), 'server' if self.tunnel.is_server else 'client']),
+            command_id=1,  # 更新tunnel id
+        ).dumps()
+        self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
     def send(self, buf):
+        if not self.last_update_tunnel or (time.time() - self.last_update_tunnel) >= 3.0:
+            # 第一次运行或者距离上一次发送大于等于3秒，发送本地tunnel id
+            self.send_update_tunnel_id()
+            self.last_update_tunnel = time.time()
+
         buf = self.cipher.encrypt(buf)
         if buf is None:
             return
@@ -137,29 +165,39 @@ class PacketControl(object):
         for _ in xrange(2):
             self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
-    def recv(self):
-        buf = self.tunnel.icmpfd.recv(2048)
-        packet = TunnelPacket(buf)
+    def parse_data(self, packet):
         if packet.seqno != 0x4147:  # True packet
             return None
         packet.data = self.cipher.decrypt(packet.data)
         if not packet.data:
             return None
-        if packet.tunnel_id <= 10:
-            # 前10个数据包
-            if len(self.recv_ids) > 10:
-                # 可能的情况为：客户端重启 或 id重置
-                self.recv_ids = list()
+        if abs(packet.tunnel_id - self.remote_tunnel_id) > self.max_packet_count_peer_sec:
+            # 错误的数据包
+            print '错误的数据包'
+            return None
         if packet.tunnel_id not in self.recv_ids:
-            if self.recv_ids and abs(packet.tunnel_id - self.recv_ids[len(self.recv_ids)-1]) <= 1000:
-                # 正常跨度下的id添加
-                if len(self.recv_ids) > self.MAX_RECV_TABLE:
-                    self.recv_ids.pop(0)
-                self.recv_ids.append(packet.tunnel_id)
+            if len(self.recv_ids) > self.MAX_RECV_TABLE:
+                self.recv_ids.pop(0)
+            self.recv_ids.append(packet.tunnel_id)
             # 无论正常不正常都写入网卡
             return packet
         else:
             return None
+
+    def parse_update_tunnel_id(self, packet):
+        assert isinstance(packet, TunnelPacket)
+        try:
+            print packet.data
+            self.remote_tunnel_id = long(packet.data.split(',')[0])
+        except:
+            pass
+
+    def recv(self):
+        buf = self.tunnel.icmpfd.recv(2048)
+        packet = TunnelPacket(buf)
+        callback = self.COMMAND.get(packet.command_id)
+        if callback:
+            return callback(packet)
 
 
 class Tunnel(object):
