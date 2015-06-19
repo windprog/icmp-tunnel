@@ -136,9 +136,11 @@ class TunnelPacket(ICMPPacket):
         return pk
 
     def dumps(self):
-        real_data = struct.pack("!BL%ss" % len(self._data), self.command_id, self.tunnel_id, self._data)
-        packfmt = "!BBHHH%ss" % (len(self._data))
-        args = [self.type, self.code, 0, self.id, self.seqno, self._data]
+        cm_buffer = struct.pack("!BL", self.command_id, self.tunnel_id)
+        assert len(cm_buffer) == 5
+        real = cm_buffer + self._data
+        packfmt = "!BBHHH%ss" % (len(real))
+        args = [self.type, self.code, 0, self.id, self.seqno, real]
         args[2] = IPPacket.checksum(struct.pack(packfmt, *args))
         return struct.pack(packfmt, *args)
 
