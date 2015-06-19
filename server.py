@@ -140,7 +140,6 @@ class PacketControl(object):
         if packet.seqno != 0x4147:  # True packet
             return None
         packet.data = self.cipher.decrypt(packet.data)
-        print packet.tunnel_id
         if not packet.data:
             return None
         if packet.tunnel_id not in self.recv_ids:
