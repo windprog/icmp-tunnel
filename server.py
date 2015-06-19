@@ -144,8 +144,12 @@ class PacketControl(object):
         if not packet.data:
             return None
         if packet.tunnel_id <= 1:
-            # id用完，重新初始化接收表
-            self.recv_ids = []
+            if len(self.recv_ids) == 1 and self.recv_ids[0] == 1:
+                # 上次已重新初始化
+                pass
+            else:
+                # id用完，重新初始化接收表
+                self.recv_ids = list()
         elif len(self.recv_ids) > 0:
             if abs(packet.tunnel_id - self.recv_ids[len(self.recv_ids)-1]) > 1000:
                 # 与最后一个数据包id对比跨度过大，表明数据不正确，丢弃
