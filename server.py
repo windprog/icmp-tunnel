@@ -201,9 +201,7 @@ class PacketControl(object):
             try:
                 self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
             except:
-                print 'send command_id:%s len:%s content fail' % (ipk.command_id, len(ipk.user_data))
                 return
-        print 'send command_id:%s len:%s content success' % (ipk.command_id, len(ipk.user_data))
 
     def send(self, buf):
         print 'accept data from tun len:%s' % len(buf)
