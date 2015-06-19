@@ -118,6 +118,9 @@ class Tunnel(object):
         self.cipher = AESCipher(PASSWORD)
 
         self.NowIdentity = 0xffff
+
+        self.recv_ids = LastUpdatedOrderedDict(10000)
+        self.now_id = 65500-10000
         if is_server:
             self.icmp_type = SERVER_ICMP_TYPE
         else:
@@ -132,6 +135,15 @@ class Tunnel(object):
                 pass
         else:
             print 'server ip:10.8.0.2 dev:ctun finish'
+
+
+    def get_id(self):
+        if self.now_id < 65500:
+            self.now_id += 1
+            return self.now_id
+        else:
+            self.now_id = 65500-10000 + 1
+            return self.now_id
 
     def get_tun(self):
         return tun_setup(self.is_server)
@@ -150,13 +162,18 @@ class Tunnel(object):
                     buf = self.cipher.encrypt(buf)
                     if buf is None:
                         continue
-                    ipk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, 0x4147, buf).dumps()
+                    ipk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, self.get_id(), buf).dumps()
                     self.icmpfd.sendto(ipk, (self.DesIp, 22))
                 elif fileno == self.icmpfd.fileno():
                     buf = self.icmpfd.recv(2048)
                     packet = ICMPPacket(buf)
                     data = packet.data
-                    if packet.seqno == 0x4147:  # True packet
+                    _id = packet.seqno
+                    if _id > 65500 - 10000:  # True packet
+                        if _id in self.recv_ids:
+                            if self.recv_ids[_id] - time.time() < 3:
+                                # 再次在3秒内接到一样id的数据包丢弃
+                                continue
                         self.NowIdentity = packet.id
                         if self.is_server:
                             des_ip = socket.inet_ntoa(packet.src)
@@ -164,9 +181,8 @@ class Tunnel(object):
                         data = self.cipher.decrypt(data)
                         if not data:
                             continue
+                        self.recv_ids[_id] = time.time()
                         self.tunfd.write(data)
-                    else:
-                        print 'not right data seqno:', packet.seqno
 
 
 if __name__ == '__main__':
