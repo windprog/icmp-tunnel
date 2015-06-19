@@ -107,6 +107,8 @@ class TunnelPacket(ICMPPacket):
         # 载入二进制数据
         ICMPPacket.loads(self, buf)
         # 网卡中的数据
+        if not self._data:
+            return
         tun_data = self.data
         # self.command_id 为头1个字节，self.tunnel_id为后四个字节
         if tun_data and len(tun_data) > 5:
