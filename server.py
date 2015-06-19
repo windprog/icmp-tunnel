@@ -199,7 +199,7 @@ class PacketControl(object):
     def recv(self):
         buf = self.tunnel.icmpfd.recv(2048)
         packet = TunnelPacket(buf)
-        print 'accept data:', packet.data[:10].replace('\n', '')
+        print 'accept len:%s data:%s' % (len(packet.data), packet.data[:10].replace('\n', ''))
         callback = self.COMMAND.get(packet.command_id)
         if callback:
             return callback(packet)
