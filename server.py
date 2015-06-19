@@ -223,7 +223,8 @@ class PacketControl(object):
             data=buf,
             command_id=0,  # 更新tunnel id
         )
-        self.send_pk(ipk)
+        for _ in xrange(2):
+            self.send_pk(ipk)
 
     def parse_data(self, packet):
         assert isinstance(packet, TunnelPacket)
