@@ -150,13 +150,14 @@ class PacketControl(object):
             data=",".join([str(self.local_tunnel_id), cm]),
             command_id=1,  # 更新tunnel id
         ).dumps()
-        print 'server' if self.tunnel.is_server else 'client'
+        print cm
         self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
     def send(self, buf):
         # print 'server' if self.tunnel.is_server else 'client'
         if not self.last_update_tunnel or (time.time() - self.last_update_tunnel) >= 3.0:
             # 第一次运行或者距离上一次发送大于等于3秒，发送本地tunnel id
+            print 'what the fuck to send update'
             self.send_update_tunnel_id()
             self.last_update_tunnel = time.time()
 
@@ -252,6 +253,7 @@ class Tunnel(object):
                         self.control.send(buf)
                     elif fileno == self.icmpfd.fileno():
                         packet = self.control.recv()
+                        print 'accept data:', packet.data[:10].replace('\n', '')
                         if not packet:
                             continue
                         data = packet.data
