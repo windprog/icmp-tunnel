@@ -183,15 +183,15 @@ class PacketControl(object):
         data = ipk.dumps()
         try:
             self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
-            return True
         except:
             self.tunnel.icmpfd.close()
             self.tunnel.icmpfd = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname("icmp"))
             try:
                 self.tunnel.icmpfd.sendto(data, (self.tunnel.DesIp, 22))
-                return True
             except:
-                print 'send too fast lost one packet'
+                print 'send command_id:%s len:%s content:%s fail' % (ipk.command_id, len(ipk.data), ipk.data[:20].replace('\n', ''))
+                return
+        print 'send command_id:%s len:%s content:%s success' % (ipk.command_id, len(ipk.data), ipk.data[:20].replace('\n', ''))
 
     def send(self, buf):
         if not self.last_update_tunnel or (time.time() - self.last_update_tunnel) >= 3.0:
@@ -211,10 +211,8 @@ class PacketControl(object):
             data=buf,
             command_id=0,  # 更新tunnel id
         )
-        if self.send_pk(ipk):
-            print 'send command_id:%s len:%s content:%s success' % (ipk.command_id, len(ipk.data), ipk.data[:20].replace('\n', ''))
-        else:
-            print 'send command_id:%s len:%s content:%s fail' % (ipk.command_id, len(ipk.data), ipk.data[:20].replace('\n', ''))
+        self.send_pk(ipk)
+
 
     def parse_data(self, packet):
         assert isinstance(packet, TunnelPacket)
