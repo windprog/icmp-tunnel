@@ -22,6 +22,8 @@ import time
 from icmp import ICMPPacket, IPPacket
 import sys
 import copy
+from collections import OrderedDict
+
 try:
     import pytun
 except:
@@ -30,6 +32,22 @@ except:
 CLIENT_ICMP_TYPE = 8
 SERVER_ICMP_TYPE = 0
 PASSWORD = 'password'
+
+from collections import OrderedDict
+
+
+class LastUpdatedOrderedDict(OrderedDict):
+    def __init__(self, capacity):
+        OrderedDict.__init__(self)  # 注意这里有self
+        self._capacity = capacity
+
+    def __setitem__(self, key, value):
+        if key in self:
+            del self[key]
+        else:
+            if len(self) >= self._capacity:
+                self.popitem(False)
+        super(LastUpdatedOrderedDict, self).__setitem__(key, value)
 
 
 def tun_setup(is_server):
@@ -142,11 +160,11 @@ class PacketControl(object):
         self.tunnel = tunnel
         self.local_tunnel_id = long(0)
         self.remote_tunnel_id = long(0)  # 3秒更新一次
-        self.recv_ids = []
+        self.recv_ids = LastUpdatedOrderedDict(10000)
 
         self.last_update_tunnel = None
 
-        self.max_packet_count_peer_sec = (1024*1024*1000 / 8) / 1000  # "每个数据包1000字节 跑满千兆网卡" 每秒 数据包数
+        self.max_packet_count_peer_sec = (1024 * 1024 * 1000 / 8) / 1000  # "每个数据包1000字节 跑满千兆网卡" 每秒 数据包数
 
         self.COMMAND = {
             0: self.parse_data,  # 已加密的正常数据
@@ -201,17 +219,9 @@ class PacketControl(object):
             code=0,
             _id=self.tunnel.now_icmp_identity,
             seqno=0x4147,
-            tunnel_id=self.get_send_id(), # 当前的tunnel id
+            tunnel_id=self.get_send_id(),  # 当前的tunnel id
             data=buf,
             command_id=0,  # 更新tunnel id
-        )
-        print 'sending', dict(
-            _type=ipk.type,
-            code=ipk.code,
-            _id=ipk.id,
-            seqno=ipk.seqno,
-            tunnel_id=ipk.tunnel_id, # 当前的tunnel id
-            command_id=ipk.command_id,  # 更新tunnel id
         )
         self.send_pk(ipk)
 
@@ -225,10 +235,8 @@ class PacketControl(object):
             # 错误的数据包
             print '错误的数据包'
             return None
-        if packet.tunnel_id not in self.recv_ids or True: # debug
-            if len(self.recv_ids) > self.MAX_RECV_TABLE:
-                self.recv_ids.pop(0)
-            self.recv_ids.append(packet.tunnel_id)
+        if packet.tunnel_id not in self.recv_ids:  # debug
+            self.recv_ids[packet.tunnel_id] = None
             print 'write to command_id:%s len:%s content' % (packet.command_id, len(data))
             return data
         else:
@@ -289,6 +297,7 @@ class Tunnel(object):
             try:
                 # 初始化iptabls  你可以自行编写脚本，方便自动化
                 from iptables import init
+
                 init()
             except:
                 pass
@@ -319,6 +328,7 @@ class Tunnel(object):
                             self.tunfd.write(data)
                 except Exception, e:
                     import traceback
+
                     print traceback.print_exc(file=sys.stdout)
 
 
