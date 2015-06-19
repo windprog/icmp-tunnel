@@ -317,6 +317,7 @@ class Tunnel(object):
                 try:
                     # 保证持续运行
                     if fileno == self.tunfd.fileno():
+                        f
                         buf = self.tunfd.read(2048)
                         self.control.send(buf)
                     elif fileno == self.icmpfd.fileno():
