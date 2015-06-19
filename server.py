@@ -194,6 +194,7 @@ class PacketControl(object):
         print 'send command_id:%s len:%s content:%s success' % (ipk.command_id, len(ipk.data), ipk.data[:20].replace('\n', ''))
 
     def send(self, buf):
+        print 'accept data from tun len:%s' % len(buf)
         if not self.last_update_tunnel or (time.time() - self.last_update_tunnel) >= 3.0:
             # 第一次运行或者距离上一次发送大于等于3秒，发送本地tunnel id
             print 'what the fuck to send update'
@@ -243,6 +244,7 @@ class PacketControl(object):
 
     def recv(self):
         buf = self.tunnel.icmpfd.recv(2048)
+        print 'accept data from internet len:%s' % len(buf)
         packet = TunnelPacket(buf)
         if packet.seqno != 0x4147:  # True packet
             return None
