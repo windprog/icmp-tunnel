@@ -194,7 +194,7 @@ class PacketControl(object):
             except:
                 print 'send command_id:%s len:%s content fail' % (ipk.command_id, len(p_data))
                 return
-        print 'send command_id:%s len:%s content success' % (p_data, len(p_data))
+        print 'send command_id:%s len:%s content success' % (ipk.command_id, len(p_data))
 
     def send(self, buf):
         print 'accept data from tun len:%s' % len(buf)
