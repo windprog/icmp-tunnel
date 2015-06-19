@@ -151,7 +151,7 @@ class PacketControl(object):
                 # 可能的情况为：客户端重启 或 id重置
                 self.recv_ids = list()
         if packet.tunnel_id not in self.recv_ids:
-            if abs(packet.tunnel_id - self.recv_ids[len(self.recv_ids)-1]) <= 1000:
+            if self.recv_ids and abs(packet.tunnel_id - self.recv_ids[len(self.recv_ids)-1]) <= 1000:
                 # 正常跨度下的id添加
                 if len(self.recv_ids) > self.MAX_RECV_TABLE:
                     self.recv_ids.pop(0)
