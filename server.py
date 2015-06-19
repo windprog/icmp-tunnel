@@ -136,8 +136,7 @@ class Tunnel(object):
                     if buf is None:
                         continue
                     ipk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, 0x4147, buf).dumps()
-                    for _ in range(2):
-                        self.icmpfd.sendto(ipk, (self.DesIp, 22))
+                    self.icmpfd.sendto(ipk, (self.DesIp, 22))
                 elif fileno == self.icmpfd.fileno():
                     buf = self.icmpfd.recv(2048)
                     packet = ICMPPacket(buf)
