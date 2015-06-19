@@ -27,6 +27,21 @@ CLIENT_ICMP_TYPE = 8
 SERVER_ICMP_TYPE = 0
 PASSWORD = 'password'
 
+from collections import OrderedDict
+
+class LastUpdatedOrderedDict(OrderedDict):
+    def __init__(self, capacity):
+        OrderedDict.__init__(self)  # 注意这里有self
+        self._capacity = capacity
+
+    def __setitem__(self, key, value):
+        if key in self:
+            del self[key]
+        else:
+            if len(self) >= self._capacity:
+                self.popitem(False)
+        super(LastUpdatedOrderedDict, self).__setitem__(key, value)
+
 
 def tun_setup(is_server):
     tun = None
@@ -150,6 +165,8 @@ class Tunnel(object):
                         if not data:
                             continue
                         self.tunfd.write(data)
+                    else:
+                        print 'not right data seqno:', packet.seqno
 
 
 if __name__ == '__main__':
