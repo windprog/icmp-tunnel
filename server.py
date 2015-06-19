@@ -140,20 +140,21 @@ class PacketControl(object):
         return self.local_tunnel_id
 
     def send_update_tunnel_id(self):
+        cm = 'server' if self.tunnel.is_server else 'client'
         ipk = TunnelPacket.create(
             _type=self.tunnel.icmp_type,
             code=0,
             _id=self.tunnel.now_icmp_identity,
             seqno=0x4147,
             tunnel_id=0,  # 这个随意一个数字都可以，在这里只是占位
-            data=",".join([str(self.local_tunnel_id), 'server' if self.tunnel.is_server else 'client']),
+            data=",".join([str(self.local_tunnel_id), cm]),
             command_id=1,  # 更新tunnel id
         ).dumps()
         print 'server' if self.tunnel.is_server else 'client'
         self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
     def send(self, buf):
-        print 'server' if self.tunnel.is_server else 'client'
+        # print 'server' if self.tunnel.is_server else 'client'
         if not self.last_update_tunnel or (time.time() - self.last_update_tunnel) >= 3.0:
             # 第一次运行或者距离上一次发送大于等于3秒，发送本地tunnel id
             self.send_update_tunnel_id()
