@@ -190,7 +190,6 @@ class PacketControl(object):
         print 'accept data from tun len:%s' % len(buf)
         if not self.last_update_tunnel or (time.time() - self.last_update_tunnel) >= 3.0:
             # 第一次运行或者距离上一次发送大于等于3秒，发送本地tunnel id
-            print 'what the fuck to send update'
             self.send_update_tunnel_id()
             self.last_update_tunnel = time.time()
 
@@ -225,7 +224,7 @@ class PacketControl(object):
             # 错误的数据包
             print '错误的数据包'
             return None
-        if packet.tunnel_id not in self.recv_ids:
+        if packet.tunnel_id not in self.recv_ids or True: # debug
             if len(self.recv_ids) > self.MAX_RECV_TABLE:
                 self.recv_ids.pop(0)
             self.recv_ids.append(packet.tunnel_id)
