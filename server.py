@@ -241,7 +241,7 @@ class PacketControl(object):
     def parse_update_tunnel_id(self, packet):
         assert isinstance(packet, TunnelPacket)
         try:
-            print 'parse_update_tunnel_id:', packet.data
+            print 'parse_update_tunnel_id:'
             self.remote_tunnel_id = long(packet.data.split(',')[0])
         except:
             pass
