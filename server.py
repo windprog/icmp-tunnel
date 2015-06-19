@@ -314,7 +314,8 @@ class Tunnel(object):
                             # 写入网卡
                             self.tunfd.write(data)
                 except Exception, e:
-                    print e
+                    import traceback
+                    print traceback.print_exc(file=sys.stdout)
 
 
 if __name__ == '__main__':
