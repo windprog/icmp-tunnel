@@ -120,6 +120,7 @@ class PacketControl(object):
         self.cipher = AESCipher(PASSWORD)
 
     def get_send_id(self):
+        # 获取自增id
         self.now_send_id += 1
         if self.now_send_id >= sys.maxint:
             self.now_send_id = long(1)
@@ -142,6 +143,13 @@ class PacketControl(object):
         packet.data = self.cipher.decrypt(packet.data)
         if not packet.data:
             return None
+        if packet.tunnel_id <= 1:
+            # id用完，重新初始化接收表
+            self.recv_ids = []
+        elif len(self.recv_ids) > 0:
+            if abs(packet.tunnel_id - self.recv_ids[len(self.recv_ids)-1]) > 1000:
+                # 与最后一个数据包id对比跨度过大，表明数据不正确，丢弃
+                return None
         if packet.tunnel_id not in self.recv_ids:
             if len(self.recv_ids) > 100000:
                 self.recv_ids.pop(0)
@@ -193,19 +201,23 @@ class Tunnel(object):
             if len(events) == 0:
                 continue
             for fileno, event in events:
-                if fileno == self.tunfd.fileno():
-                    buf = self.tunfd.read(2048)
-                    self.control.send(buf)
-                elif fileno == self.icmpfd.fileno():
-                    packet = self.control.recv()
-                    if not packet:
-                        continue
-                    data = packet.data
-                    self.now_icmp_identity = packet.id
-                    if self.is_server:
-                        des_ip = socket.inet_ntoa(packet.src)
-                        self.DesIp = des_ip
-                    self.tunfd.write(data)
+                try:
+                    # 保证持续运行
+                    if fileno == self.tunfd.fileno():
+                        buf = self.tunfd.read(2048)
+                        self.control.send(buf)
+                    elif fileno == self.icmpfd.fileno():
+                        packet = self.control.recv()
+                        if not packet:
+                            continue
+                        data = packet.data
+                        self.now_icmp_identity = packet.id
+                        if self.is_server:
+                            des_ip = socket.inet_ntoa(packet.src)
+                            self.DesIp = des_ip
+                        self.tunfd.write(data)
+                except Exception, e:
+                    print e
 
 
 if __name__ == '__main__':
