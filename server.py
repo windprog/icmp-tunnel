@@ -175,13 +175,14 @@ class Tunnel(object):
                         if self.recv_ids[_id] - time.time() < 3:
                             # 再次在3秒内接到一样id的数据包丢弃
                             continue
-                    self.NowIdentity = packet.id
                     if self.is_server:
                         des_ip = socket.inet_ntoa(packet.src)
                         self.DesIp = des_ip
                     data = self.cipher.decrypt(data)
                     if not data:
                         continue
+                    # 可解密，证明是正常数据，保证通路正常
+                    self.NowIdentity = packet.id
                     self.recv_ids[_id] = time.time()
                     self.tunfd.write(data)
 
