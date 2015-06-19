@@ -214,7 +214,6 @@ class PacketControl(object):
         )
         self.send_pk(ipk)
 
-
     def parse_data(self, packet):
         assert isinstance(packet, TunnelPacket)
         data = packet.data
@@ -260,6 +259,8 @@ class PacketControl(object):
         callback = self.COMMAND.get(packet.command_id)
         if callback:
             return callback(packet)
+        else:
+            return buf
 
 
 class Tunnel(object):
