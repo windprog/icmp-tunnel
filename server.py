@@ -103,8 +103,8 @@ class AESCipher:
         return ret
 
 
-MIN_ID = 65500-10000
-MAX_ID = 65500
+MIN_ID = 0
+MAX_ID = 0xffff
 
 class Tunnel(object):
     def __init__(self, is_server, des_ip=None):
@@ -140,11 +140,11 @@ class Tunnel(object):
             print 'server ip:10.8.0.2 dev:ctun finish'
 
     def get_id(self):
-        if self.now_id > MIN_ID and self.now_id < MAX_ID:
+        if self.now_id < MAX_ID:
             self.now_id += 1
             return self.now_id
         else:
-            self.now_id = MIN_ID + 1
+            self.now_id = MIN_ID
             return self.now_id
 
     def get_tun(self):
@@ -171,22 +171,19 @@ class Tunnel(object):
                     packet = ICMPPacket(buf)
                     data = packet.data
                     _id = packet.seqno
-                    if _id > MIN_ID:  # True packet
-                        if _id in self.recv_ids:
-                            if self.recv_ids[_id] - time.time() < 3:
-                                # 再次在3秒内接到一样id的数据包丢弃
-                                continue
-                        self.NowIdentity = packet.id
-                        if self.is_server:
-                            des_ip = socket.inet_ntoa(packet.src)
-                            self.DesIp = des_ip
-                        data = self.cipher.decrypt(data)
-                        if not data:
+                    if _id in self.recv_ids:
+                        if self.recv_ids[_id] - time.time() < 3:
+                            # 再次在3秒内接到一样id的数据包丢弃
                             continue
-                        self.recv_ids[_id] = time.time()
-                        self.tunfd.write(data)
-                    else:
-                        print 'error seqno', packet.seqno
+                    self.NowIdentity = packet.id
+                    if self.is_server:
+                        des_ip = socket.inet_ntoa(packet.src)
+                        self.DesIp = des_ip
+                    data = self.cipher.decrypt(data)
+                    if not data:
+                        continue
+                    self.recv_ids[_id] = time.time()
+                    self.tunfd.write(data)
 
 
 if __name__ == '__main__':
