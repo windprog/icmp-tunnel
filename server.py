@@ -185,6 +185,8 @@ class Tunnel(object):
                             continue
                         self.recv_ids[_id] = time.time()
                         self.tunfd.write(data)
+                    else:
+                        print 'error seqno', packet.seqno
 
 
 if __name__ == '__main__':
