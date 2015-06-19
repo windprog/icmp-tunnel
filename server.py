@@ -170,8 +170,6 @@ class PacketControl(object):
             self.tunnel.icmpfd.sendto(ipk, (self.tunnel.DesIp, 22))
 
     def parse_data(self, packet):
-        if packet.seqno != 0x4147:  # True packet
-            return None
         packet.data = self.cipher.decrypt(packet.data)
         if not packet.data:
             return None
@@ -199,6 +197,8 @@ class PacketControl(object):
     def recv(self):
         buf = self.tunnel.icmpfd.recv(2048)
         packet = TunnelPacket(buf)
+        if packet.seqno != 0x4147:  # True packet
+            return None
         print 'accept len:%s data:%s' % (len(packet.data), packet.data[:10].replace('\n', ''))
         callback = self.COMMAND.get(packet.command_id)
         if callback:
