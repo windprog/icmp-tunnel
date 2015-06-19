@@ -103,6 +103,9 @@ class AESCipher:
         return ret
 
 
+MIN_ID = 65500-10000
+MAX_ID = 65500
+
 class Tunnel(object):
     def __init__(self, is_server, des_ip=None):
         self.is_server = is_server
@@ -120,7 +123,7 @@ class Tunnel(object):
         self.NowIdentity = 0xffff
 
         self.recv_ids = LastUpdatedOrderedDict(10000)
-        self.now_id = 65500-10000
+        self.now_id = MIN_ID
         if is_server:
             self.icmp_type = SERVER_ICMP_TYPE
         else:
@@ -136,13 +139,12 @@ class Tunnel(object):
         else:
             print 'server ip:10.8.0.2 dev:ctun finish'
 
-
     def get_id(self):
-        if self.now_id < 65500:
+        if self.now_id > MIN_ID and self.now_id < MAX_ID:
             self.now_id += 1
             return self.now_id
         else:
-            self.now_id = 65500-10000 + 1
+            self.now_id = MIN_ID + 1
             return self.now_id
 
     def get_tun(self):
@@ -169,7 +171,7 @@ class Tunnel(object):
                     packet = ICMPPacket(buf)
                     data = packet.data
                     _id = packet.seqno
-                    if _id > 65500 - 10000:  # True packet
+                    if _id > MIN_ID:  # True packet
                         if _id in self.recv_ids:
                             if self.recv_ids[_id] - time.time() < 3:
                                 # 再次在3秒内接到一样id的数据包丢弃
