@@ -136,8 +136,9 @@ class TunnelPacket(ICMPPacket):
         return pk
 
     def dumps(self):
-        packfmt = "!BBHHHBL%ss" % (len(self._data))
-        args = [self.type, self.code, 0, self.id, self.seqno, self.command_id, self.tunnel_id, self._data]
+        real_data = struct.pack("!BL%ss" % len(self._data), self.command_id, self.tunnel_id, self._data)
+        packfmt = "!BBHHH%ss" % (len(real_data))
+        args = [self.type, self.code, 0, self.id, self.seqno, real_data]
         args[2] = IPPacket.checksum(struct.pack(packfmt, *args))
         return struct.pack(packfmt, *args)
 
@@ -216,12 +217,12 @@ class PacketControl(object):
             command_id=0,  # 更新tunnel id
         )
         print 'sending', dict(
-            _type=self.tunnel.icmp_type,
-            code=0,
-            _id=self.tunnel.now_icmp_identity,
-            seqno=0x4147,
+            _type=ipk.type,
+            code=ipk.code,
+            _id=ipk.id,
+            seqno=ipk.seqno,
             tunnel_id=ipk.tunnel_id, # 当前的tunnel id
-            command_id=0,  # 更新tunnel id
+            command_id=ipk.command_id,  # 更新tunnel id
         )
         self.send_pk(ipk)
 
