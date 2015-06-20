@@ -161,10 +161,17 @@ class Tunnel(object):
             for fileno, event in events:
                 if fileno == self.tunfd.fileno():
                     buf = self.tunfd.read(2048)
-                    buf = self.cipher.encrypt(buf)
+                    buf = self.cipher.encrypt(buf) + struct.pack('!d', time.time())
                     if buf is None:
                         continue
-                    ipk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, self.get_id(), buf).dumps()
+                    ipk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, 0x4147, buf).dumps()
+                    # debug
+                    new_pk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, 0x4147, buf)
+                    new_pk.dumps()
+                    next_pk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, 0x4147, (buf[:-8] + struct.pack('!d', time.time())))
+                    next_pk.dumps()
+                    print 'sending checksum:%s next same packet checksum:%s' % (new_pk.chksum, next_pk.chksum)
+                    
                     try:
                         self.icmpfd.sendto(ipk, (self.DesIp, 22))
                     except:
@@ -178,21 +185,24 @@ class Tunnel(object):
                     buf = self.icmpfd.recv(2048)
                     packet = ICMPPacket(buf)
                     data = packet.data
-                    _id = packet.seqno
-                    if _id in self.recv_ids:
-                        if self.recv_ids[_id] - time.time() < 3:
-                            # 再次在3秒内接到一样id的数据包丢弃
+                    if packet.seqno == 0x4147:
+                        chksum = packet.chksum
+                        if chksum in self.recv_ids:
+                            if time.time() - self.recv_ids[chksum] < 3:
+                                # 再次在3秒内接到一样id的数据包丢弃
+                                continue
+                        if self.is_server:
+                            des_ip = socket.inet_ntoa(packet.src)
+                            self.DesIp = des_ip
+                        if len(data) <= 8:
                             continue
-                    if self.is_server:
-                        des_ip = socket.inet_ntoa(packet.src)
-                        self.DesIp = des_ip
-                    data = self.cipher.decrypt(data)
-                    if not data:
-                        continue
-                    # 可解密，证明是正常数据，保证通路正常
-                    self.NowIdentity = packet.id
-                    self.recv_ids[_id] = time.time()
-                    self.tunfd.write(data)
+                        data = self.cipher.decrypt(data[:-8])
+                        if not data:
+                            continue
+                        # 可解密，证明是正常数据，保证通路正常
+                        self.NowIdentity = packet.id
+                        self.recv_ids[chksum] = time.time()
+                        self.tunfd.write(data)
 
 
 if __name__ == '__main__':

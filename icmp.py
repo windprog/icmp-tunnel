@@ -62,5 +62,6 @@ class ICMPPacket(IPPacket):
     def dumps(self):
         packfmt = "!BBHHH%ss" % (len(self.data))
         args = [self.type, self.code, 0, self.id, self.seqno, self.data]
-        args[2] = IPPacket.checksum(struct.pack(packfmt, *args))
+        self.chksum = IPPacket.checksum(struct.pack(packfmt, *args))
+        args[2] = self.chksum
         return struct.pack(packfmt, *args)
