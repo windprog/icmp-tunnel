@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-Copyright (c) 2015 netease
+Copyright (c) 2015 Windpro
 
 Author  :   windpro
-E-mail  :   zzn1889@corp.netease.com
+E-mail  :   windprog@gmail.com
 Date    :   15/6/13
 Desc    :   
 """

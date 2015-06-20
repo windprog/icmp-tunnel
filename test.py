@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 """
-Copyright (c) 2015 netease
+Copyright (c) 2015 Windpro
 
 Author  :   windpro
-E-mail  :   zzn1889@corp.netease.com
+E-mail  :   windprog@gmail.com
 Date    :   15/6/19
 Desc    :   
 """
 from unittest import TestCase
-from server import PacketControl, TunnelPacket, IPPacket, cipher
+from server import OldPacketControl, TunnelPacket, IPPacket, cipher
 from server import CLIENT_ICMP_TYPE, SERVER_ICMP_TYPE
 import socket
 
@@ -62,7 +62,7 @@ class MockServerTunnel(object):
 
 class ServerTestCase(TestCase):
     def setUp(self):
-        self.server_ctl = PacketControl(MockServerTunnel(self))
+        self.server_ctl = OldPacketControl(MockServerTunnel(self))
         # self.client_ctl = PacketControl(MockClientTunnel())
 
     def test_success_recv(self):
