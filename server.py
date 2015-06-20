@@ -166,15 +166,9 @@ class Tunnel(object):
                         if buf is None:
                             continue
                         ipk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, 0x4147, buf).dumps()
-                        # debug
-                        new_pk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, 0x4147, buf)
-                        new_pk.dumps()
-                        next_pk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, 0x4147, (buf[:-8] + struct.pack('!d', time.time())))
-                        next_pk.dumps()
-                        print 'sending checksum:%s next same packet checksum:%s' % (new_pk.chksum, next_pk.chksum)
-
                         try:
-                            self.icmpfd.sendto(ipk, (self.DesIp, 22))
+                            for _ in xrange(2):
+                                self.icmpfd.sendto(ipk, (self.DesIp, 22))
                         except:
                             self.icmpfd.close()
                             self.icmpfd = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname("icmp"))
@@ -189,8 +183,8 @@ class Tunnel(object):
                         if packet.seqno == 0x4147:
                             chksum = packet.chksum
                             if chksum in self.recv_ids:
-                                if time.time() - self.recv_ids[chksum] < 3:
-                                    # 再次在3秒内接到一样id的数据包丢弃
+                                if time.time() - self.recv_ids[chksum] < 1:
+                                    # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
                                     continue
                             if self.is_server:
                                 des_ip = socket.inet_ntoa(packet.src)
