@@ -301,6 +301,14 @@ class Client():
             if sys.platform == 'darwin':
                 from iptables import osx_client_init
                 osx_client_init()
+            else:
+                """
+                    ubuntu
+                    self.tfd = os.open("/dev/net/tun", os.O_RDWR)
+                    ifs = fcntl.ioctl(self.tfd, globalvar.TUNSETIFF, struct.pack("16sH", "t%d", globalvar.IFF_TUN))
+                    self.tname = ifs[:16].strip("\x00")
+                """
+                
         except:
             pass
 
