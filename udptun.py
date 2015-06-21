@@ -173,7 +173,7 @@ class Server():
                 if r == self.udpfd:
                     if DEBUG: os.write(1, "<")
                     data, addr = self.udpfd.recvfrom(BUFFER_SIZE)
-                    if data and len(data) < 6:
+                    if data and len(data) <= 6:
                         continue
                     print addr
 
