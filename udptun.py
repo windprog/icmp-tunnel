@@ -54,6 +54,7 @@ class Server():
             raise Exception('Failed to create tun device')
         ifs = fcntl.ioctl(tun_fd, TUNSETIFF, struct.pack("16sH", "tun%d", IFF_TUN))
         tname = ifs[:16].strip("\x00")
+        print 'tun fileno :', tun_fd
         return {'tun_fd': tun_fd, 'tun_name': tname}
 
     def config_tun(self, c):
