@@ -197,11 +197,11 @@ class Server():
                     c = self.get_client_by_tun(r)
                     if DEBUG: os.write(1, ">")
                     data = os.read(r, BUFFER_SIZE)
-                    checksum_str = struct.pack('!H', IPPacket.checksum(
+                    ex_str = struct.pack('!LH', c['session_id'], IPPacket.checksum(
                         data + struct.pack('!d', time.time())
                     ))
                     try:
-                        data += checksum_str
+                        data += ex_str
                         for _ in xrange(2):
                             self.udpfd.sendto(data, tuple(c['addr']))
                     except:
