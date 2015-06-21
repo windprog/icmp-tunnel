@@ -327,7 +327,6 @@ class Client():
                         if not self.session_id:
                             print '还未登陆，无法发送网卡数据'
                             continue
-                        print self.session_id
                         ex_str = struct.pack('!LH', self.session_id, IPPacket.checksum(
                             data + struct.pack('!d', time.time())
                         ))
