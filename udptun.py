@@ -169,7 +169,7 @@ class Server():
                         c['active_time'] = now
                         if data and len(data) < 2:
                             continue
-                        chksum = data[-2:]
+                        chksum = struct.unpack('!H', data[-2:])[0]
                         print 'accept:checksum:%s' % chksum
                         if chksum in recv_ids:
                             if time.time() - recv_ids[chksum] < 1:
@@ -318,7 +318,7 @@ class Client():
                     else:
                         if data and len(data) < 2:
                             continue
-                        chksum = data[-2:]
+                        chksum = struct.unpack('!H', data[-2:])[0]
                         print 'accept:checksum:%s' % chksum
                         if chksum in recv_ids:
                             if time.time() - recv_ids[chksum] < 1:
