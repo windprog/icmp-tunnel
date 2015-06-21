@@ -383,6 +383,7 @@ class Client():
                     elif r == self.udpfd:
                         if DEBUG: os.write(1, "<")
                         data, src = self.udpfd.recvfrom(BUFFER_SIZE)
+                        print src
                         if data.startswith("AUTH"):
                             self.do_login(data)
                         elif data.startswith('RTBL'):
