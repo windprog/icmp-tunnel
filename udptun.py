@@ -299,7 +299,6 @@ class Client():
             except:
                 print 'Ubuntu客户端情况下请安装pip install python-pytun'
                 sys.exit(0)
-            self.need_del_tun_top_5_bit = False
             is_config = False
             for i in xrange(10):
                 try:
@@ -314,7 +313,6 @@ class Client():
                     c = {'tun_fd': tun.fileno(), 'tun_name': tname}
                     c['tun_ip'] = IFACE_IP
                     c['tun_peer'] = IFACE_PEER
-                    self.need_del_tun_top_5_bit = True
                     break
                 except:
                     pass
@@ -372,12 +370,10 @@ class Client():
                         dst = struct.unpack('!I', data[20:24])[0]
                         addr = self.get_router_by_dst(dst)
                         try:
+                            print 'sending', addr
                             data += ex_str
                             for _ in xrange(2):
-                                if not self.need_del_tun_top_5_bit:
-                                    self.udpfd.sendto(data, tuple(addr))
-                                else:
-                                    self.udpfd.sendto(data[4:], tuple(addr))
+                                self.udpfd.sendto(data, tuple(addr))
                         except:
                             pass
                     elif r == self.udpfd:
