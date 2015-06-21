@@ -196,7 +196,7 @@ class Server():
                         try:
                             os.write(c['tun_fd'], data[:-6])
                         except:
-                            print c['tun_fd'], data[:-6]
+                            print c['tun_fd']
                             sys.exit(0)
                 else:
                     c = self.get_client_by_tun(r)
