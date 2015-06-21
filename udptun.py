@@ -27,7 +27,7 @@ from server import LastUpdatedOrderedDict
 
 SHARED_PASSWORD = hashlib.sha1("feiwu").digest()
 TUNSETIFF = 0x400454ca
-IFF_TUN   = 0x0001 | 0x1000 #TUN + NO_PI
+IFF_TUN = 0x0001 | 0x1000  # TUN + NO_PI
 
 BUFFER_SIZE = 8192
 MODE = 0
@@ -36,9 +36,10 @@ PORT = 0
 IFACE_IP = "10.0.0.1"
 IFACE_PEER = "10.0.0.2"
 MTU = 1400
-TIMEOUT = 60*10 # seconds
-RT_INTERVAL = 30 # seconds
+TIMEOUT = 60 * 10  # seconds
+RT_INTERVAL = 30  # seconds
 ipstr2int = lambda x: struct.unpack('!I', socket.inet_aton(x))[0]
+
 
 class Server():
     def create_tun(self):
@@ -107,13 +108,15 @@ class Server():
                 c.update(t)
                 self.config_tun(c)
                 self.sessions.append(c)
-                print '[%s] Created new tun %s, %s -> %s for %s' % (time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], c['addr'])
+                print '[%s] Created new tun %s, %s -> %s for %s' % (
+                time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], c['addr'])
             else:
-                print '[%s] Keep alive tun %s, %s -> %s for %s' % (time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], c['addr'])
+                print '[%s] Keep alive tun %s, %s -> %s for %s' % (
+                time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], c['addr'])
             d = {
                 'ret': 0,
             }
-            self.udpfd.sendto('AUTH'+ pickle.dumps(d), addr)
+            self.udpfd.sendto('AUTH' + pickle.dumps(d), addr)
             print 'send ok to', addr
         else:
             self.udpfd.sendto('AUTH', addr)
@@ -124,10 +127,11 @@ class Server():
         """
         table = []
         for c in self.sessions:
-            r = {'network': c['tun_peer'], 'mask': 32, 'gw': c['tun_peer'], 'addr': c['addr'], 'active_time': int(c['active_time'])}
+            r = {'network': c['tun_peer'], 'mask': 32, 'gw': c['tun_peer'], 'addr': c['addr'],
+                 'active_time': int(c['active_time'])}
             table.append(r)
         data = os.popen('ip route show|grep zebra').read()
-        for ip,mask,gw in re.findall(r'([\d\.]+)/(\d+) via ([\d\.]+)', data):
+        for ip, mask, gw in re.findall(r'([\d\.]+)/(\d+) via ([\d\.]+)', data):
             c = self.get_client_by_intip(gw)
             r = {'network': ip, 'mask': int(mask), 'gw': gw, 'addr': c['addr'], 'active_time': int(c['active_time'])}
             table.append(r)
@@ -135,7 +139,8 @@ class Server():
         for c in self.sessions:
             try:
                 self.udpfd.sendto(data, c['addr'])
-            except: pass
+            except:
+                pass
 
     def run(self):
         """ Server packets loop """
@@ -165,10 +170,12 @@ class Server():
                         if data and len(data) < 2:
                             continue
                         chksum = data[-2:]
+                        print 'accept:checksum:%s' % chksum
                         if chksum in recv_ids:
                             if time.time() - recv_ids[chksum] < 1:
                                 # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
                                 continue
+                        print 'write:checksum:%s' % chksum
                         os.write(c['tun_fd'], data[:-2])
                 else:
                     c = self.get_client_by_tun(r)
@@ -178,11 +185,15 @@ class Server():
                         data + struct.pack('!d', time.time())
                     ))
                     try:
-                        self.udpfd.sendto(data+checksum_str, c['addr'])
-                    except: pass
+                        data += checksum_str
+                        for _ in xrange(2):
+                            self.udpfd.sendto(data, c['addr'])
+                    except:
+                        pass
             if now % RT_INTERVAL == 0 and now != self.rt_sync_time:
                 self.sync_routes()
                 self.rt_sync_time = now
+
 
 class Client():
     def create_tun(self):
@@ -232,7 +243,7 @@ class Client():
             return
         rt = []
         for x in table:
-            mask = 0xffffffff & (0xffffffff << (32-x['mask']))
+            mask = 0xffffffff & (0xffffffff << (32 - x['mask']))
             network = ipstr2int(x['network'])
             addr = x['addr']
             rt.append((network, mask, addr))
@@ -262,11 +273,12 @@ class Client():
         self.addr = (IP, PORT)
         self.rt_table = [(0, 0, (IP, PORT))]
         recv_ids = LastUpdatedOrderedDict(10000)
-        print '[%s] Created client %s, %s -> %s for %s' % (time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], self.addr)
+        print '[%s] Created client %s, %s -> %s for %s' % (
+        time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], self.addr)
 
         while True:
             now = time.time()
-            if now - self.active_time > 60: #If no packets within 60 secs, Force relogin, NAT problem, Just keepalive
+            if now - self.active_time > 60:  # If no packets within 60 secs, Force relogin, NAT problem, Just keepalive
                 self.active_time = now
                 self.logged = False
             if not self.logged and time.time() - self.log_time > 2.:
@@ -278,7 +290,7 @@ class Client():
                 data = pickle.dumps(d)
                 self.udpfd.sendto('AUTH' + data, self.addr)
                 self.log_time = now
-                print "[%s] Do login ..." % (time.ctime(), )
+                print "[%s] Do login ..." % (time.ctime(),)
 
             rset = select.select([self.udpfd, self.tunfd], [], [], 1)[0]
             for r in rset:
@@ -290,7 +302,12 @@ class Client():
                     ))
                     dst = struct.unpack('!I', data[20:24])[0]
                     addr = self.get_router_by_dst(dst)
-                    self.udpfd.sendto(data + checksum_str, addr)
+                    try:
+                        data += checksum_str
+                        for _ in xrange(2):
+                            self.udpfd.sendto(data, addr)
+                    except:
+                        pass
                 elif r == self.udpfd:
                     if DEBUG: os.write(1, "<")
                     data, src = self.udpfd.recvfrom(BUFFER_SIZE)
@@ -302,23 +319,28 @@ class Client():
                         if data and len(data) < 2:
                             continue
                         chksum = data[-2:]
+                        print 'accept:checksum:%s' % chksum
                         if chksum in recv_ids:
                             if time.time() - recv_ids[chksum] < 1:
                                 # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
                                 continue
+                        print 'write:checksum:%s' % chksum
                         os.write(self.tunfd, data[:-2])
                         self.active_time = now
 
-def usage(status = 0):
+
+def usage(status=0):
     print "Usage: %s [-s port|-c serverip] [-hd] [-l localip]" % (sys.argv[0])
     sys.exit(status)
+
 
 def on_exit(no, info):
     raise Exception("TERM signal caught!")
 
-if __name__=="__main__":
-    opts = getopt.getopt(sys.argv[1:],"s:c:l:p:hd")
-    for opt,optarg in opts[0]:
+
+if __name__ == "__main__":
+    opts = getopt.getopt(sys.argv[1:], "s:c:l:p:hd")
+    for opt, optarg in opts[0]:
         if opt == "-h":
             usage()
         elif opt == "-d":

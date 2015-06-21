@@ -13,7 +13,6 @@ from Crypto import Random
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 import json
-import pytun
 import random
 import select
 import socket
@@ -44,6 +43,10 @@ class LastUpdatedOrderedDict(OrderedDict):
 
 
 def tun_setup(is_server):
+    try:
+        import pytun
+    except:
+        raise Exception('run in server must pip install python-pytun')
     tun = None
     if is_server == True:
         tun = pytun.TunTapDevice("stun")
