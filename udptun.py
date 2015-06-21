@@ -175,6 +175,7 @@ class Server():
                     data, addr = self.udpfd.recvfrom(BUFFER_SIZE)
                     if data and len(data) < 6:
                         continue
+                    print addr
 
                     session_id, chksum = struct.unpack('!LH', data[-6:])
 
