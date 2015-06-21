@@ -112,7 +112,7 @@ class Server():
                     'tun_peer': d['tun_ip'],
                     'tun_ip': d['tun_peer'],
                     'active_time': time.time(),
-                    'session_id': random.randint(0, sys.maxint)
+                    'session_id': random.randint(0, 4294967295)  # struct 中 L 最大为：4294967295
                 }
                 t = self.create_tun()
                 c.update(t)
@@ -248,7 +248,7 @@ class Client():
             d = {'ret': 1}
         if d['ret'] == 0:
             self.logged = True
-            self.session_id = d['session_id']
+            self.session_id = int(d['session_id'])
             print "Logged in server succefully!"
         else:
             self.logged = False
@@ -326,6 +326,8 @@ class Client():
                         data = os.read(self.tunfd, BUFFER_SIZE)
                         if not self.session_id:
                             print '还未登陆，无法发送网卡数据'
+                            continue
+                        print self.session_id
                         ex_str = struct.pack('!LH', self.session_id, IPPacket.checksum(
                             data + struct.pack('!d', time.time())
                         ))
