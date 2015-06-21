@@ -170,12 +170,10 @@ class Server():
                         if data and len(data) < 2:
                             continue
                         chksum = struct.unpack('!H', data[-2:])[0]
-                        print 'accept:checksum:%s' % chksum
                         if chksum in recv_ids:
                             if time.time() - recv_ids[chksum] < 1:
                                 # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
                                 continue
-                        print 'write:checksum:%s' % chksum
                         recv_ids[chksum] = time.time()
                         os.write(c['tun_fd'], data[:-2])
                 else:
@@ -276,6 +274,12 @@ class Client():
         recv_ids = LastUpdatedOrderedDict(10000)
         print '[%s] Created client %s, %s -> %s for %s' % (
         time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], self.addr)
+        try:
+            if sys.platform == 'darwin':
+                from iptables import osx_client_init
+                osx_client_init()
+        except:
+            pass
 
         while True:
             now = time.time()
@@ -320,12 +324,10 @@ class Client():
                         if data and len(data) < 2:
                             continue
                         chksum = struct.unpack('!H', data[-2:])[0]
-                        print 'accept:checksum:%s' % chksum
                         if chksum in recv_ids:
                             if time.time() - recv_ids[chksum] < 1:
                                 # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
                                 continue
-                        print 'write:checksum:%s' % chksum
                         recv_ids[chksum] = time.time()
                         os.write(self.tunfd, data[:-2])
                         self.active_time = now
