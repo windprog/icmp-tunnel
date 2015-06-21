@@ -24,6 +24,8 @@ import cPickle as pickle
 import re
 from icmp import IPPacket
 from server import LastUpdatedOrderedDict
+from socket import error as socket_error
+import random
 
 SHARED_PASSWORD = hashlib.sha1("feiwu").digest()
 TUNSETIFF = 0x400454ca
@@ -77,8 +79,15 @@ class Server():
                 return c
         return None
 
+    def get_client_by_remote_ip_and_session_id(self, r_ip, session_id):
+        for c in self.sessions:
+            ip, port = c['addr']
+            if ip == r_ip and c['session_id'] == session_id:
+                return c
+
     def do_login(self, data, addr):
         """Deal with client logins, use share key."""
+        addr = list(addr)
         if data.startswith('AUTH'):
             d = pickle.loads(data[4:])
             # Check password
@@ -103,6 +112,7 @@ class Server():
                     'tun_peer': d['tun_ip'],
                     'tun_ip': d['tun_peer'],
                     'active_time': time.time(),
+                    'session_id': random.randint(0, sys.maxint)
                 }
                 t = self.create_tun()
                 c.update(t)
@@ -113,8 +123,10 @@ class Server():
             else:
                 print '[%s] Keep alive tun %s, %s -> %s for %s' % (
                 time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], c['addr'])
+            session_id = c['session_id']
             d = {
                 'ret': 0,
+                'session_id': str(session_id)
             }
             self.udpfd.sendto('AUTH' + pickle.dumps(d), addr)
             print 'send ok to', addr
@@ -161,21 +173,26 @@ class Server():
                 if r == self.udpfd:
                     if DEBUG: os.write(1, "<")
                     data, addr = self.udpfd.recvfrom(BUFFER_SIZE)
+                    if data and len(data) < 6:
+                        continue
 
-                    c = self.get_client_by_addr(addr)
-                    if data.startswith('AUTH') or not c:
+                    session_id, chksum = struct.unpack('!LH', data[-6:])
+
+                    if data.startswith('AUTH'):
                         self.do_login(data, addr)
                     else:
-                        c['active_time'] = now
-                        if data and len(data) < 2:
+                        c = self.get_client_by_remote_ip_and_session_id(addr[0], session_id)
+                        if not c:
+                            self.do_login(data, addr)
                             continue
-                        chksum = struct.unpack('!H', data[-2:])[0]
+                        c['addr'][1] = addr[1]
+                        c['active_time'] = now
                         if chksum in recv_ids:
                             if time.time() - recv_ids[chksum] < 1:
                                 # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
                                 continue
                         recv_ids[chksum] = time.time()
-                        os.write(c['tun_fd'], data[:-2])
+                        os.write(c['tun_fd'], data[:-6])
                 else:
                     c = self.get_client_by_tun(r)
                     if DEBUG: os.write(1, ">")
@@ -195,6 +212,9 @@ class Server():
 
 
 class Client():
+    def __init__(self):
+        self.session_id = None
+
     def create_tun(self):
         """ Every client needs a tun interface """
         if sys.platform == 'darwin':
@@ -228,6 +248,7 @@ class Client():
             d = {'ret': 1}
         if d['ret'] == 0:
             self.logged = True
+            self.session_id = d['session_id']
             print "Logged in server succefully!"
         else:
             self.logged = False
@@ -269,7 +290,7 @@ class Client():
         self.logged = False
         self.log_time = 0
         self.active_time = 0
-        self.addr = (IP, PORT)
+        self.addr = [IP, PORT]
         self.rt_table = [(0, 0, (IP, PORT))]
         recv_ids = LastUpdatedOrderedDict(10000)
         print '[%s] Created client %s, %s -> %s for %s' % (
@@ -282,55 +303,62 @@ class Client():
             pass
 
         while True:
-            now = time.time()
-            if now - self.active_time > 60:  # If no packets within 60 secs, Force relogin, NAT problem, Just keepalive
-                self.active_time = now
-                self.logged = False
-            if not self.logged and time.time() - self.log_time > 2.:
-                d = {
-                    'password': SHARED_PASSWORD,
-                    'tun_ip': IFACE_IP,
-                    'tun_peer': IFACE_PEER,
-                }
-                data = pickle.dumps(d)
-                self.udpfd.sendto('AUTH' + data, self.addr)
-                self.log_time = now
-                print "[%s] Do login ..." % (time.ctime(),)
+            try:
+                now = time.time()
+                if now - self.active_time > 60:  # If no packets within 60 secs, Force relogin, NAT problem, Just keepalive
+                    self.active_time = now
+                    self.logged = False
+                if not self.logged and time.time() - self.log_time > 2.:
+                    d = {
+                        'password': SHARED_PASSWORD,
+                        'tun_ip': IFACE_IP,
+                        'tun_peer': IFACE_PEER,
+                    }
+                    data = pickle.dumps(d)
+                    self.udpfd.sendto('AUTH' + data, self.addr)
+                    self.log_time = now
+                    print "[%s] Do login ..." % (time.ctime(),)
 
-            rset = select.select([self.udpfd, self.tunfd], [], [], 1)[0]
-            for r in rset:
-                if r == self.tunfd:
-                    if DEBUG: os.write(1, ">")
-                    data = os.read(self.tunfd, BUFFER_SIZE)
-                    checksum_str = struct.pack('!H', IPPacket.checksum(
-                        data + struct.pack('!d', time.time())
-                    ))
-                    dst = struct.unpack('!I', data[20:24])[0]
-                    addr = self.get_router_by_dst(dst)
-                    try:
-                        data += checksum_str
-                        for _ in xrange(2):
-                            self.udpfd.sendto(data, addr)
-                    except:
-                        pass
-                elif r == self.udpfd:
-                    if DEBUG: os.write(1, "<")
-                    data, src = self.udpfd.recvfrom(BUFFER_SIZE)
-                    if data.startswith("AUTH"):
-                        self.do_login(data)
-                    elif data.startswith('RTBL'):
-                        self.update_routes(data)
-                    else:
-                        if data and len(data) < 2:
-                            continue
-                        chksum = struct.unpack('!H', data[-2:])[0]
-                        if chksum in recv_ids:
-                            if time.time() - recv_ids[chksum] < 1:
-                                # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
+                rset = select.select([self.udpfd, self.tunfd], [], [], 1)[0]
+                for r in rset:
+                    if r == self.tunfd:
+                        if DEBUG: os.write(1, ">")
+                        data = os.read(self.tunfd, BUFFER_SIZE)
+                        if not self.session_id:
+                            print '还未登陆，无法发送网卡数据'
+                        ex_str = struct.pack('!LH', self.session_id, IPPacket.checksum(
+                            data + struct.pack('!d', time.time())
+                        ))
+                        dst = struct.unpack('!I', data[20:24])[0]
+                        addr = self.get_router_by_dst(dst)
+                        try:
+                            data += ex_str
+                            for _ in xrange(2):
+                                self.udpfd.sendto(data, addr)
+                        except:
+                            pass
+                    elif r == self.udpfd:
+                        if DEBUG: os.write(1, "<")
+                        data, src = self.udpfd.recvfrom(BUFFER_SIZE)
+                        if data.startswith("AUTH"):
+                            self.do_login(data)
+                        elif data.startswith('RTBL'):
+                            self.update_routes(data)
+                        else:
+                            if data and len(data) < 6:
                                 continue
-                        recv_ids[chksum] = time.time()
-                        os.write(self.tunfd, data[:-2])
-                        self.active_time = now
+                            session_id, chksum = struct.unpack('!LH', data[-6:])
+                            if chksum in recv_ids:
+                                if time.time() - recv_ids[chksum] < 1:
+                                    # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
+                                    continue
+                            recv_ids[chksum] = time.time()
+                            os.write(self.tunfd, data[:-6])
+                            self.active_time = now
+            except socket_error, e:
+                print e.errno, e
+                if e.errno == 50 or e.errno == 51:
+                    time.sleep(1)
 
 
 def usage(status=0):
