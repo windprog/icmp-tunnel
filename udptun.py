@@ -243,7 +243,10 @@ class Client():
     def config_tun(self, c):
         """ Set up local ip and peer ip """
         print "Configuring interface %s with ip %s" % (c['tun_name'], c['tun_ip'])
-        os.system("ifconfig %s %s/32 %s mtu %s up" % (c['tun_name'], c['tun_ip'], c['tun_peer'], MTU))
+        if sys.platform == 'darwin':
+            os.system("ifconfig %s %s/32 %s mtu %s up" % (c['tun_name'], c['tun_ip'], c['tun_peer'], MTU))
+        else:
+            os.system("ifconfig %s %s dstaddr %s mtu %s up" % (c['tun_name'], c['tun_ip'], c['tun_peer'], MTU))
 
     def do_login(self, data):
         """ Check login results """
