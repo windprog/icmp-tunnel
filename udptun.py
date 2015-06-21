@@ -282,6 +282,7 @@ class Client():
         """ Client network loop """
         global PORT
         c = self.create_tun()
+        print IFACE_IP, IFACE_PEER
         c['tun_ip'] = IFACE_IP
         c['tun_peer'] = IFACE_PEER
         self.config_tun(c)
