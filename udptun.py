@@ -54,7 +54,6 @@ class Server():
             raise Exception('Failed to create tun device')
         ifs = fcntl.ioctl(tun_fd, TUNSETIFF, struct.pack("16sH", "tun%d", IFF_TUN))
         tname = ifs[:16].strip("\x00")
-        print 'tun fileno :', tun_fd
         return {'tun_fd': tun_fd, 'tun_name': tname}
 
     def config_tun(self, c):
@@ -176,7 +175,6 @@ class Server():
                     data, addr = self.udpfd.recvfrom(BUFFER_SIZE)
                     if data and len(data) <= 6:
                         continue
-                    print addr
 
                     session_id, chksum = struct.unpack('!LH', data[-6:])
 
@@ -370,7 +368,6 @@ class Client():
                         dst = struct.unpack('!I', data[20:24])[0]
                         addr = self.get_router_by_dst(dst)
                         try:
-                            print 'sending', addr
                             data += ex_str
                             for _ in xrange(2):
                                 self.udpfd.sendto(data, tuple(addr))
@@ -379,7 +376,6 @@ class Client():
                     elif r == self.udpfd:
                         if DEBUG: os.write(1, "<")
                         data, src = self.udpfd.recvfrom(BUFFER_SIZE)
-                        print src
                         if data.startswith("AUTH"):
                             self.do_login(data)
                         elif data.startswith('RTBL'):
