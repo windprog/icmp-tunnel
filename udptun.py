@@ -176,6 +176,7 @@ class Server():
                                 # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
                                 continue
                         print 'write:checksum:%s' % chksum
+                        recv_ids[chksum] = time.time()
                         os.write(c['tun_fd'], data[:-2])
                 else:
                     c = self.get_client_by_tun(r)
@@ -325,6 +326,7 @@ class Client():
                                 # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
                                 continue
                         print 'write:checksum:%s' % chksum
+                        recv_ids[chksum] = time.time()
                         os.write(self.tunfd, data[:-2])
                         self.active_time = now
 
