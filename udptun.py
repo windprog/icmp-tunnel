@@ -281,11 +281,36 @@ class Client():
     def run(self):
         """ Client network loop """
         global PORT
-        c = self.create_tun()
-        print IFACE_IP, IFACE_PEER
-        c['tun_ip'] = IFACE_IP
-        c['tun_peer'] = IFACE_PEER
-        self.config_tun(c)
+        if sys.platform == 'darwin':
+            c = self.create_tun()
+            c['tun_ip'] = IFACE_IP
+            c['tun_peer'] = IFACE_PEER
+            self.config_tun(c)
+        else:
+            try:
+                import pytun
+            except:
+                print 'Ubuntu客户端情况下请安装pip install python-pytun'
+                sys.exit(0)
+            is_config = False
+            for i in xrange(10):
+                try:
+                    tname = "t%s" % i
+                    tun = pytun.TunTapDevice(tname)
+                    tun.addr = IFACE_IP
+                    tun.dstaddr = IFACE_PEER
+                    tun.netmask = "255.255.255.0"
+                    tun.mtu = MTU
+                    tun.up()
+                    is_config = True
+                    c = {'tun_fd': tun.fileno(), 'tun_name': tname}
+                    break
+                except:
+                    pass
+            if not is_config:
+                print '无可用网卡'
+                sys.exit(0)
+
         self.tunfd = c['tun_fd']
         self.udpfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udpfd.bind(("", 0))
@@ -301,13 +326,6 @@ class Client():
             if sys.platform == 'darwin':
                 from iptables import osx_client_init
                 osx_client_init()
-            else:
-                """
-                    ubuntu
-                    self.tfd = os.open("/dev/net/tun", os.O_RDWR)
-                    ifs = fcntl.ioctl(self.tfd, globalvar.TUNSETIFF, struct.pack("16sH", "t%d", globalvar.IFF_TUN))
-                    self.tname = ifs[:16].strip("\x00")
-                """
                 
         except:
             pass
