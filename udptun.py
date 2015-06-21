@@ -304,6 +304,8 @@ class Client():
                     tun.up()
                     is_config = True
                     c = {'tun_fd': tun.fileno(), 'tun_name': tname}
+                    c['tun_ip'] = IFACE_IP
+                    c['tun_peer'] = IFACE_PEER
                     break
                 except:
                     pass
