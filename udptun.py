@@ -96,7 +96,7 @@ class Server():
                     'ret': 1,
                     'msg': 'Incorrent password.'
                 }
-                self.udpfd.sendto('AUTH' + pickle.dumps(d), addr)
+                self.udpfd.sendto('AUTH' + pickle.dumps(d), tuple(addr))
                 return
             # Find existing session
             found = False
@@ -128,10 +128,10 @@ class Server():
                 'ret': 0,
                 'session_id': str(session_id)
             }
-            self.udpfd.sendto('AUTH' + pickle.dumps(d), addr)
+            self.udpfd.sendto('AUTH' + pickle.dumps(d), tuple(addr))
             print 'send ok to', addr
         else:
-            self.udpfd.sendto('AUTH', addr)
+            self.udpfd.sendto('AUTH', tuple(addr))
 
     def sync_routes(self):
         """ Send dynamic routing table to every client for P2P package excahnge.
@@ -150,7 +150,7 @@ class Server():
         data = 'RTBL' + pickle.dumps(table)
         for c in self.sessions:
             try:
-                self.udpfd.sendto(data, c['addr'])
+                self.udpfd.sendto(data, tuple(c['addr']))
             except:
                 pass
 
@@ -203,7 +203,7 @@ class Server():
                     try:
                         data += checksum_str
                         for _ in xrange(2):
-                            self.udpfd.sendto(data, c['addr'])
+                            self.udpfd.sendto(data, tuple(c['addr']))
                     except:
                         pass
             if now % RT_INTERVAL == 0 and now != self.rt_sync_time:
@@ -315,7 +315,7 @@ class Client():
                         'tun_peer': IFACE_PEER,
                     }
                     data = pickle.dumps(d)
-                    self.udpfd.sendto('AUTH' + data, self.addr)
+                    self.udpfd.sendto('AUTH' + data, tuple(self.addr))
                     self.log_time = now
                     print "[%s] Do login ..." % (time.ctime(),)
 
@@ -334,7 +334,7 @@ class Client():
                         try:
                             data += ex_str
                             for _ in xrange(2):
-                                self.udpfd.sendto(data, addr)
+                                self.udpfd.sendto(data, tuple(addr))
                         except:
                             pass
                     elif r == self.udpfd:
