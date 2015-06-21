@@ -197,8 +197,7 @@ class Server():
                         try:
                             os.write(c['tun_fd'], data[:-6])
                         except:
-                            print c['tun_fd']
-                            sys.exit(0)
+                            print 'error accept', addr
                 else:
                     c = self.get_client_by_tun(r)
                     if DEBUG: os.write(1, ">")
