@@ -285,7 +285,7 @@ class Client():
     def run(self):
         """ Client network loop """
         global PORT
-        if sys.platform == 'darwin':
+        if sys.platform == 'darwin' or True:
             c = self.create_tun()
             c['tun_ip'] = IFACE_IP
             c['tun_peer'] = IFACE_PEER
