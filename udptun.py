@@ -23,11 +23,12 @@ import binascii
 import cPickle as pickle
 import re
 from icmp import IPPacket
-from server import LastUpdatedOrderedDict
+from server import LastUpdatedOrderedDict, AESCipher
 from socket import error as socket_error
 import random
 
-SHARED_PASSWORD = hashlib.sha1("feiwu").digest()
+PASSWORD = "feiwu"
+SHARED_PASSWORD = hashlib.sha1(PASSWORD).digest()
 TUNSETIFF = 0x400454ca
 IFF_TUN = 0x0001 | 0x1000  # TUN + NO_PI
 
@@ -162,6 +163,7 @@ class Server():
         self.sessions = []
         self.rt_sync_time = 0
         recv_ids = LastUpdatedOrderedDict(10000)
+        cipher = AESCipher(PASSWORD)
 
         print 'Server listen at port', PORT
         while True:
@@ -197,13 +199,14 @@ class Server():
                                 continue
                         recv_ids[chksum] = time.time()
                         try:
-                            os.write(c['tun_fd'], data[:-6])
+                            os.write(c['tun_fd'], cipher.decrypt(data[:-6]))
                         except:
                             print 'error accept', addr
                 else:
                     c = self.get_client_by_tun(r)
                     if DEBUG: os.write(1, ">")
                     data = os.read(r, BUFFER_SIZE)
+                    data = cipher.encrypt(data)
                     ex_str = struct.pack('!LH', c['session_id'], IPPacket.checksum(
                         data + struct.pack('!d', time.time())
                     ))
@@ -331,6 +334,7 @@ class Client():
         self.addr = [IP, PORT]
         self.rt_table = [(0, 0, (IP, PORT))]
         recv_ids = LastUpdatedOrderedDict(10000)
+        cipher = AESCipher(PASSWORD)
         print '[%s] Created client %s, %s -> %s for %s' % (
         time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], self.addr)
         try:
@@ -363,6 +367,7 @@ class Client():
                     if r == self.tunfd:
                         if DEBUG: os.write(1, ">")
                         data = os.read(self.tunfd, BUFFER_SIZE)
+                        data = cipher.encrypt(data)
                         if not self.session_id:
                             print '还未登陆，无法发送网卡数据'
                             continue
@@ -393,7 +398,7 @@ class Client():
                                     # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
                                     continue
                             recv_ids[chksum] = time.time()
-                            os.write(self.tunfd, data[:-6])
+                            os.write(self.tunfd, cipher.decrypt(data[:-6]))
                             self.active_time = now
             except socket_error, e:
                 print e.errno, e
