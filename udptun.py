@@ -34,7 +34,7 @@ IFF_TUN = 0x0001 | 0x1000  # TUN + NO_PI
 
 BUFFER_SIZE = 8192
 MODE = 0
-DEBUG = 0
+DEBUG = False
 PORT = 0
 IFACE_IP = "10.0.0.1"
 IFACE_PEER = "10.0.0.2"
@@ -156,6 +156,9 @@ class Server(BaseNode):
         else:
             buf = self.icmpfd.recv(2048)
             packet = ICMPPacket(buf)
+            if DEBUG:
+                print 'recv icmp:', 'type:',packet.type, 'code:', packet.code, \
+                    'chksum:', packet.chksum, 'id:', packet.id, 'seqno', packet.seqno
             if packet.seqno != 0x4148:
                 return
             data = packet.data
@@ -249,9 +252,9 @@ class Client(BaseNode):
         self.session = {
             'tun_ip': tun_ip,
             'tun_peer': tun_peer,
-            'type': action,
-            'icmp_id': 0xffff,
         }
+        self.action_type = action
+        self.icmp_id = 0xffff
         self.session.update(self.create_tun())
         self.config_tun(self.session)
         self.tunfd = self.session['tun_fd']
@@ -320,11 +323,10 @@ class Client(BaseNode):
         print "Logged failed"
 
     def send(self, data):
-        ss = self.session
-        _type = ss.get('type')
+        _type = self.action_type
         ip = self.server_ip
         udp_port = self.server_port
-        icmp_id = ss.get('icmp_id')
+        icmp_id = self.icmp_id
         if _type == 'udp' and ip and udp_port:
             self.send_udp(data, ip, udp_port)
         elif _type == 'icmp' and ip and icmp_id:
@@ -340,8 +342,10 @@ class Client(BaseNode):
         }
         self.send('AUTH' + pickle.dumps(d))
         self.log_time = time.time()
-        print "[%s] Do login %s %s:%s" % (time.ctime(), self.session.get('type', ''), self.server_ip,
-                                          self.server_port if self.session.get('type', '') else self.session['icmp_id'])
+        print "[%s] Do login %s %s:%s" % (
+            time.ctime(), self.action_type, self.server_ip,
+            self.server_port if self.action_type == 'udp' else self.icmp_id
+        )
 
     def parse_recv(self, _type):
         if _type == 'udp':
@@ -349,6 +353,9 @@ class Client(BaseNode):
         else:
             buf = self.icmpfd.recv(2048)
             packet = ICMPPacket(buf)
+            if DEBUG:
+                print 'recv icmp:', 'type:',packet.type, 'code:', packet.code, \
+                    'chksum:', packet.chksum, 'id:', packet.id, 'seqno', packet.seqno
             if packet.seqno != 0x4148:
                 return
             data = packet.data
@@ -377,7 +384,7 @@ class Client(BaseNode):
                     self.active_time = now
                     self.logged = False
                     if now - self.login_success_time > 180:
-                        self.session['type'] = 'icmp'
+                        self.action_type = 'icmp'
                 if not self.logged and now - self.log_time > 2.:
                     self.do_login()
                 rset = select.select([self.udpfd, self.icmpfd, self.tunfd], [], [], 1)[0]
@@ -427,7 +434,7 @@ if __name__ == "__main__":
         if opt == "-h":
             usage()
         elif opt == "-d":
-            DEBUG += 1
+            DEBUG = True
         elif opt == "-s":
             MODE = 1
             PORT = int(optarg)
