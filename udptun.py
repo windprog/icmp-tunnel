@@ -82,7 +82,7 @@ class Server():
     def get_client_by_remote_ip_and_session_id(self, r_ip, session_id):
         for c in self.sessions:
             ip, port = c['addr']
-            if ip == r_ip and c['session_id'] == session_id:
+            if c['session_id'] == session_id: # ip == r_ip and
                 return c
 
     def do_login(self, data, addr):
@@ -186,6 +186,7 @@ class Server():
                             self.do_login(data, addr)
                             continue
                         c['addr'][1] = addr[1]
+                        c['addr'][0] = addr[0]
                         c['active_time'] = now
                         if chksum in recv_ids:
                             if time.time() - recv_ids[chksum] < 1:
