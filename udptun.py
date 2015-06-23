@@ -88,6 +88,12 @@ class Server(BaseNode):
         """Set up IP address and P2P address"""
         print "Configuring interface %s with ip %s" % (c['tun_name'], c['tun_ip'])
         os.system("ifconfig %s %s dstaddr %s mtu %s up" % (c['tun_name'], c['tun_ip'], c['tun_peer'], MTU))
+        try:
+            from iptables import init
+
+            init()
+        except:
+            pass
 
     def send(self, data, session_id):
         ss = self.sessions.get(session_id)
@@ -169,6 +175,7 @@ class Server(BaseNode):
                 session['type'] = _type
                 self.send_login_success(session['session_id'])
             else:
+                print 'login error %s %s:%s' % (_type, ip, port_or_id)
                 send_login_error()
         else:
             if data and len(data) < 7:
@@ -333,7 +340,8 @@ class Client(BaseNode):
         }
         self.send('AUTH' + pickle.dumps(d))
         self.log_time = time.time()
-        print "[%s] Do login ..." % time.ctime()
+        print "[%s] Do login %s %s:%s" % (time.ctime(), self.session.get('type', ''), self.server_ip,
+                                          self.server_port if self.session.get('type', '') else self.session['icmp_id'])
 
     def parse_recv(self, _type):
         if _type == 'udp':
