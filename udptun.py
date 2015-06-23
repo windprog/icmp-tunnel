@@ -185,6 +185,8 @@ class Server():
                         if not c:
                             self.do_login(data, addr)
                             continue
+                        if c['addr'] != list(addr):
+                            print 'from ', c['addr'], 'update to', addr
                         c['addr'][1] = addr[1]
                         c['addr'][0] = addr[0]
                         c['active_time'] = now
