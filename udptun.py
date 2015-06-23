@@ -262,7 +262,7 @@ class Client(BaseNode):
             if sys.platform == 'darwin':
                 from iptables import osx_client_init
 
-                # osx_client_init()
+                osx_client_init()
         except:
             pass
 
@@ -385,7 +385,7 @@ class Client(BaseNode):
                         ))
                         # dst = struct.unpack('!I', data[20:24])[0]
                         # addr = self.get_router_by_dst(dst)
-                        print 'new packet from:%s' % socket.inet_ntoa(data[20:24])
+                        # print 'new packet from:%s' % socket.inet_ntoa(data[20:24])
 
                         try:
                             data += ex_str
