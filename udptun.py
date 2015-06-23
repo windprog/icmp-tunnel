@@ -183,6 +183,7 @@ class Server():
                     else:
                         c = self.get_client_by_remote_ip_and_session_id(addr[0], session_id)
                         if not c:
+                            print 'accept not login packet from ', addr
                             self.do_login(data, addr)
                             continue
                         if c['addr'] != list(addr):
