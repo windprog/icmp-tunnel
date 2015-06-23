@@ -23,11 +23,11 @@ import binascii
 import cPickle as pickle
 import re
 from icmp import IPPacket
-from server import LastUpdatedOrderedDict, AESCipher
+from server import LastUpdatedOrderedDict, AESCipher, ICMPPacket
 from socket import error as socket_error
 import random
 
-PASSWORD = "feiwu"
+PASSWORD = "icmpudp"
 SHARED_PASSWORD = hashlib.sha1(PASSWORD).digest()
 TUNSETIFF = 0x400454ca
 IFF_TUN = 0x0001 | 0x1000  # TUN + NO_PI
@@ -44,7 +44,34 @@ RT_INTERVAL = 30  # seconds
 ipstr2int = lambda x: struct.unpack('!I', socket.inet_aton(x))[0]
 
 
-class Server():
+class BaseNode(object):
+    def __init__(self):
+        self.udpfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.icmpfd = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname("icmp"))
+        self.cipher = AESCipher(PASSWORD)
+        self.recv_ids = LastUpdatedOrderedDict(10000)
+
+    def send_udp(self, data, ip, udp_port):
+        self.udpfd.sendto(data, (ip, udp_port))
+
+    def send_icmp(self, data, ip, icmp_id):
+        pk = ICMPPacket.create(_type=self.icmp_code, code=0, _id=icmp_id, seqno=0x4148, data=data)
+        self.icmpfd.sendto(pk.dumps(), (ip, 22))
+
+
+class Server(BaseNode):
+    def __init__(self, server_port=1111):
+        super(Server, self).__init__()
+        self.sessions = {}  # session_id: {'ip', 'type'(udp or icmp), 'udp_port', 'icmp_id', 'tunfd', 'tun_peer', 'tun_ip', 'active_time'}
+        self.udpfd.bind(("", server_port))
+        print 'Server listen at port', PORT
+        self.icmp_code = 0
+
+    def get_client_by_tun(self, r):
+        for c in self.sessions.itervalues():
+            if c['tun_fd'] == r:
+                return c
+
     def create_tun(self):
         """For every client, we create a P2P interface for it."""
         try:
@@ -62,168 +89,182 @@ class Server():
         print "Configuring interface %s with ip %s" % (c['tun_name'], c['tun_ip'])
         os.system("ifconfig %s %s dstaddr %s mtu %s up" % (c['tun_name'], c['tun_ip'], c['tun_peer'], MTU))
 
-    def get_client_by_addr(self, addr):
-        for c in self.sessions:
-            if c['addr'] == addr:
-                return c
-        return None
-
-    def get_client_by_tun(self, tun):
-        for c in self.sessions:
-            if c['tun_fd'] == tun:
-                return c
-        return None
-
-    def get_client_by_intip(self, ip):
-        for c in self.sessions:
-            if c['tun_peer'] == ip:
-                return c
-        return None
-
-    def get_client_by_remote_ip_and_session_id(self, r_ip, session_id):
-        for c in self.sessions:
-            ip, port = c['addr']
-            if c['session_id'] == session_id: # ip == r_ip and
-                return c
-
-    def do_login(self, data, addr):
-        """Deal with client logins, use share key."""
-        addr = list(addr)
-        if data.startswith('AUTH'):
-            d = pickle.loads(data[4:])
-            # Check password
-            if d['password'] != SHARED_PASSWORD:
-                d = {
-                    'ret': 1,
-                    'msg': 'Incorrent password.'
-                }
-                self.udpfd.sendto('AUTH' + pickle.dumps(d), tuple(addr))
-                return
-            # Find existing session
-            found = False
-            for c in self.sessions:
-                if c['tun_peer'] == d['tun_ip'] and c['tun_ip'] == d['tun_peer']:
-                    c['addr'] = addr
-                    found = True
-                    break
-            if not found:
-                # Create new client session
-                c = {
-                    'addr': addr,
-                    'tun_peer': d['tun_ip'],
-                    'tun_ip': d['tun_peer'],
-                    'active_time': time.time(),
-                    'session_id': random.randint(0, 4294967295)  # struct 中 L 最大为：4294967295
-                }
-                t = self.create_tun()
-                c.update(t)
-                self.config_tun(c)
-                self.sessions.append(c)
-                print '[%s] Created new tun %s, %s -> %s for %s' % (
-                time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], c['addr'])
-            else:
-                print '[%s] Keep alive tun %s, %s -> %s for %s' % (
-                time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], c['addr'])
-            session_id = c['session_id']
-            d = {
-                'ret': 0,
-                'session_id': str(session_id)
-            }
-            self.udpfd.sendto('AUTH' + pickle.dumps(d), tuple(addr))
-            print 'send ok to', addr
+    def send(self, data, session_id):
+        ss = self.sessions.get(session_id)
+        _type = ss.get('type')
+        ip = ss.get('ip')
+        udp_port = ss.get('udp_port')
+        icmp_id = ss.get('icmp_id')
+        if _type == 'udp' and ip and udp_port:
+            self.send_udp(data, ip, udp_port)
+        elif _type == 'icmp' and ip and icmp_id:
+            self.send_icmp(data, ip, icmp_id)
         else:
-            self.udpfd.sendto('AUTH', tuple(addr))
+            print 'sending error no', session_id, ip, _type, 'udp', udp_port, 'icmp', icmp_id
 
-    def sync_routes(self):
-        """ Send dynamic routing table to every client for P2P package excahnge.
-            This only works for clients behide Full-Cone NAT at the moment. Should be improved.
-        """
-        table = []
-        for c in self.sessions:
-            r = {'network': c['tun_peer'], 'mask': 32, 'gw': c['tun_peer'], 'addr': c['addr'],
-                 'active_time': int(c['active_time'])}
-            table.append(r)
-        data = os.popen('ip route show|grep zebra').read()
-        for ip, mask, gw in re.findall(r'([\d\.]+)/(\d+) via ([\d\.]+)', data):
-            c = self.get_client_by_intip(gw)
-            r = {'network': ip, 'mask': int(mask), 'gw': gw, 'addr': c['addr'], 'active_time': int(c['active_time'])}
-            table.append(r)
-        data = 'RTBL' + pickle.dumps(table)
-        for c in self.sessions:
+    def send_login_success(self, _session_id):
+        d = {
+            'ret': 0,
+            'session_id': str(_session_id)
+        }
+        self.send('AUTH' + pickle.dumps(d), _session_id)
+
+    def do_login(self, data):
+        if data.startswith('AUTH'):
+            _input = pickle.loads(data[4:])
+            # Check password
+            if _input['password'] != SHARED_PASSWORD:
+                return None
+            # Find existing session
+            for session_id, c in self.sessions.iteritems():
+                if c['tun_peer'] == _input['tun_ip'] and c['tun_ip'] == _input['tun_peer']:
+                    print '[%s] Keep alive tun %s, %s -> %s for %s %s:%s' % (
+                        time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'],
+                        c.get('type', ''), c.get('ip', ''),
+                        c.get('udp_port', '') if c.get('type') == 'udp' else c.get('icmp_id', ''))
+                    return c
+            # Create new client session
+            c = {
+                'tun_peer': _input['tun_ip'],
+                'tun_ip': _input['tun_peer'],
+                'active_time': time.time(),
+            }
+            c.update(self.create_tun())
+            self.config_tun(c)
+            session_id = random.randint(0, 4294967295)  # struct 中 L 最大为：4294967295
+            while session_id in self.sessions:
+                session_id = random.randint(0, 4294967295)
+            self.sessions[session_id] = c
+            c['session_id'] = session_id
+            print '[%s] Created new tun %s, %s -> %s' % (
+                time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'])
+            return c
+
+    def parse_recv(self, _type):
+        if _type == 'udp':
+            data, addr = self.udpfd.recvfrom(BUFFER_SIZE)
+            ip, port_or_id = addr
+
+            def send_login_error():
+                self.send_udp('AUTH', ip, port_or_id)
+        else:
+            buf = self.icmpfd.recv(2048)
+            packet = ICMPPacket(buf)
+            if packet.seqno != 0x4148:
+                return
+            data = packet.data
+            ip = socket.inet_ntoa(packet.src)
+            port_or_id = packet.id
+
+            def send_login_error():
+                self.send_icmp('AUTH', ip, port_or_id)
+        if data.startswith('AUTH'):
+            session = self.do_login(data)
+            if session:
+                session['ip'] = ip
+                if _type == 'udp':
+                    session['udp_port'] = port_or_id
+                else:
+                    session['icmp_id'] = port_or_id
+                session['type'] = _type
+                self.send_login_success(session['session_id'])
+            else:
+                send_login_error()
+        else:
+            if data and len(data) < 7:
+                return
+            session_id, chksum = struct.unpack('!LH', data[-6:])
+            c = self.sessions.get(session_id)  # 等待修改，可改成ip + session_id的方式防止劫持
+            if not c:
+                print 'accept not login packet from %s %s:%s' % (_type, ip, port_or_id)
+                return
+            if c['type'] != _type or c['ip'] != ip or \
+                    ((_type == 'udp' and c['udp_port'] != port_or_id) or (
+                            _type == 'icmp' and c['icmp_id'] != port_or_id)):
+                print 'updating %s: %s %s:%s to %s %s:%s' % (
+                    session_id, c['type'], c['ip'], c['udp_port'], _type, ip, port_or_id)
+                c['type'] = _type
+                c['ip'] = ip
+                if _type == 'udp':
+                    c['udp_port'] = port_or_id
+                else:
+                    c['icmp_id'] = port_or_id
+            c['active_time'] = time.time()
+            if chksum in self.recv_ids:
+                if time.time() - self.recv_ids[chksum] < 1:
+                    # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
+                    return
+            self.recv_ids[chksum] = time.time()
+            data = self.cipher.decrypt(data[:-6])
             try:
-                self.udpfd.sendto(data, tuple(c['addr']))
+                os.write(c['tun_fd'], data)
             except:
-                pass
+                print 'error packet from %s %s:%s' % (_type, ip, port_or_id)
 
     def run(self):
         """ Server packets loop """
-        global PORT
-        self.udpfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.udpfd.bind(("", PORT))
-        self.sessions = []
-        self.rt_sync_time = 0
-        recv_ids = LastUpdatedOrderedDict(10000)
-        cipher = AESCipher(PASSWORD)
-
-        print 'Server listen at port', PORT
         while True:
-            now = int(time.time())
-            fds = [x['tun_fd'] for x in self.sessions]
+            fds = [x['tun_fd'] for x in self.sessions.itervalues()]
             fds.append(self.udpfd)
+            fds.append(self.icmpfd)
             rset = select.select(fds, [], [], 1)[0]
             for r in rset:
                 if r == self.udpfd:
-                    if DEBUG: os.write(1, "<")
-                    data, addr = self.udpfd.recvfrom(BUFFER_SIZE)
-                    if data and len(data) <= 6:
-                        continue
-
-                    session_id, chksum = struct.unpack('!LH', data[-6:])
-
-                    if data.startswith('AUTH'):
-                        self.do_login(data, addr)
-                    else:
-                        c = self.get_client_by_remote_ip_and_session_id(addr[0], session_id)
-                        if not c:
-                            print 'accept not login packet from ', addr
-                            self.do_login(data, addr)
-                            continue
-                        if c['addr'] != list(addr):
-                            print 'from ', c['addr'], 'update to', addr
-                        c['addr'][1] = addr[1]
-                        c['addr'][0] = addr[0]
-                        c['active_time'] = now
-                        if chksum in recv_ids:
-                            if time.time() - recv_ids[chksum] < 1:
-                                # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
-                                continue
-                        recv_ids[chksum] = time.time()
-                        try:
-                            os.write(c['tun_fd'], cipher.decrypt(data[:-6]))
-                        except:
-                            print 'error accept', addr
+                    self.parse_recv('udp')
+                elif r == self.icmpfd:
+                    self.parse_recv('icmp')
                 else:
                     c = self.get_client_by_tun(r)
-                    if DEBUG: os.write(1, ">")
                     data = os.read(r, BUFFER_SIZE)
-                    data = cipher.encrypt(data)
+                    data = self.cipher.encrypt(data)
                     ex_str = struct.pack('!LH', c['session_id'], IPPacket.checksum(
                         data + struct.pack('!d', time.time())
                     ))
                     try:
                         data += ex_str
                         for _ in xrange(2):
-                            self.udpfd.sendto(data, tuple(c['addr']))
+                            self.send(data, c['session_id'])
                     except:
                         pass
-            if now % RT_INTERVAL == 0 and now != self.rt_sync_time:
-                self.sync_routes()
-                self.rt_sync_time = now
 
 
-class Client():
-    def __init__(self):
+class Client(BaseNode):
+    def __init__(self, server_ip, server_port, tun_ip, tun_peer, action='udp'):
+        super(Client, self).__init__()
+        self.icmp_code = 8
         self.session_id = None
+        self.password = PASSWORD
+        self.logged = False
+        self.server_ip = server_ip
+        self.server_port = server_port
+        self.tun_ip = tun_ip
+        self.tun_peer = tun_peer
+        self.session = {
+            'tun_ip': tun_ip,
+            'tun_peer': tun_peer,
+            'type': action,
+            'icmp_id': 0xffff,
+        }
+        self.session.update(self.create_tun())
+        self.config_tun(self.session)
+        self.tunfd = self.session['tun_fd']
+        self.udpfd.bind(("", 0))
+        # runtime
+        self.logged = False
+        self.log_time = 0
+        self.active_time = time.time()
+        self.login_success_time = time.time()
+        self.do_login()
+        print '[%s] Created client %s, %s -> %s for udp %s:%s' % (
+            time.ctime(), self.session['tun_name'], self.session['tun_ip'], self.session['tun_peer'],
+            server_ip, server_port)
+        try:
+            if sys.platform == 'darwin':
+                from iptables import osx_client_init
+
+                # osx_client_init()
+        except:
+            pass
 
     def create_tun(self):
         """ Every client needs a tun interface """
@@ -232,9 +273,9 @@ class Client():
                 try:
                     tname = 'tun%s' % i
                     tun_fd = os.open('/dev/%s' % tname, os.O_RDWR)
-                    break
+                    return {'tun_fd': tun_fd, 'tun_name': tname}
                 except:
-                    continue
+                    pass
         else:
             try:
                 tun_fd = os.open("/dev/net/tun", os.O_RDWR)
@@ -242,108 +283,84 @@ class Client():
                 tun_fd = os.open("/dev/tun", os.O_RDWR)
             ifs = fcntl.ioctl(tun_fd, TUNSETIFF, struct.pack("16sH", "t%d", IFF_TUN))
             tname = ifs[:16].strip("\x00")
-
-        return {'tun_fd': tun_fd, 'tun_name': tname}
+            return {'tun_fd': tun_fd, 'tun_name': tname}
+        raise Exception('无法创建网卡')
 
     def config_tun(self, c):
-        """ Set up local ip and peer ip """
+        """
+            Set up local ip and peer ip
+            支持mac
+        """
         print "Configuring interface %s with ip %s" % (c['tun_name'], c['tun_ip'])
         if sys.platform == 'darwin':
             os.system("ifconfig %s %s/32 %s mtu %s up" % (c['tun_name'], c['tun_ip'], c['tun_peer'], MTU))
         else:
             os.system("ifconfig %s %s dstaddr %s mtu %s up" % (c['tun_name'], c['tun_ip'], c['tun_peer'], MTU))
 
-    def do_login(self, data):
+    def parse_login_result(self, data):
         """ Check login results """
+        self.logged = False
         try:
             d = pickle.loads(data[4:])
+            if d['ret'] == 0:
+                self.logged = True
+                self.session_id = int(d['session_id'])
+                self.login_success_time = time.time()
+                print "session_id:%s Logged in server succefully!" % self.session_id
+                return
         except:
-            d = {'ret': 1}
-        if d['ret'] == 0:
-            self.logged = True
-            self.session_id = int(d['session_id'])
-            print "Logged in server succefully!"
+            pass
+        print "Logged failed"
+
+    def send(self, data):
+        ss = self.session
+        _type = ss.get('type')
+        ip = self.server_ip
+        udp_port = self.server_port
+        icmp_id = ss.get('icmp_id')
+        if _type == 'udp' and ip and udp_port:
+            self.send_udp(data, ip, udp_port)
+        elif _type == 'icmp' and ip and icmp_id:
+            self.send_icmp(data, ip, icmp_id)
         else:
-            self.logged = False
-            print "Logged failed:", d.get('msg')
+            print 'sending error no', ip, _type, 'udp', udp_port, 'icmp', icmp_id
 
-    def update_routes(self, data):
-        """ Update routing table (peer list) for P2P packet exchange """
-        try:
-            table = pickle.loads(data[4:])
-        except:
-            traceback.print_exc()
-            return
-        rt = []
-        for x in table:
-            mask = 0xffffffff & (0xffffffff << (32 - x['mask']))
-            network = ipstr2int(x['network'])
-            addr = x['addr']
-            rt.append((network, mask, addr))
-        rt.append((0, 0, (IP, PORT)))
-        self.rt_table = rt
+    def do_login(self):
+        d = {
+            'password': SHARED_PASSWORD,
+            'tun_ip': IFACE_IP,
+            'tun_peer': IFACE_PEER,
+        }
+        self.send('AUTH' + pickle.dumps(d))
+        self.log_time = time.time()
+        print "[%s] Do login ..." % time.ctime()
 
-    def get_router_by_dst(self, dst):
-        for n, m, addr in self.rt_table:
-            if dst & m == n:
-                return addr
-        print 'No route address for', dst
-        return self.addr
+    def parse_recv(self, _type):
+        if _type == 'udp':
+            data, addr = self.udpfd.recvfrom(BUFFER_SIZE)
+        else:
+            buf = self.icmpfd.recv(2048)
+            packet = ICMPPacket(buf)
+            if packet.seqno != 0x4148:
+                return
+            data = packet.data
+
+        if data.startswith("AUTH"):
+            self.parse_login_result(data)
+        else:
+            if data and len(data) < 7:
+                return
+            session_id, chksum = struct.unpack('!LH', data[-6:])
+            if chksum in self.recv_ids:
+                if time.time() - self.recv_ids[chksum] < 1:
+                    # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
+                    return
+            self.recv_ids[chksum] = time.time()
+            os.write(self.tunfd, self.cipher.decrypt(data[:-6]))
+            self.active_time = time.time()
 
     def run(self):
         """ Client network loop """
-        global PORT
-        if sys.platform == 'darwin' or True:
-            c = self.create_tun()
-            c['tun_ip'] = IFACE_IP
-            c['tun_peer'] = IFACE_PEER
-            self.config_tun(c)
-        else:
-            try:
-                import pytun
-            except:
-                print 'Ubuntu客户端情况下请安装pip install python-pytun'
-                sys.exit(0)
-            is_config = False
-            for i in xrange(10):
-                try:
-                    tname = "t%s" % i
-                    tun = pytun.TunTapDevice(tname)
-                    tun.addr = IFACE_IP
-                    tun.dstaddr = IFACE_PEER
-                    tun.netmask = "255.255.255.0"
-                    tun.mtu = MTU
-                    tun.up()
-                    is_config = True
-                    c = {'tun_fd': tun.fileno(), 'tun_name': tname}
-                    c['tun_ip'] = IFACE_IP
-                    c['tun_peer'] = IFACE_PEER
-                    break
-                except:
-                    pass
-            if not is_config:
-                print '无可用网卡'
-                sys.exit(0)
-
-        self.tunfd = c['tun_fd']
-        self.udpfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.udpfd.bind(("", 0))
-        self.logged = False
-        self.log_time = 0
-        self.active_time = 0
-        self.addr = [IP, PORT]
-        self.rt_table = [(0, 0, (IP, PORT))]
-        recv_ids = LastUpdatedOrderedDict(10000)
-        cipher = AESCipher(PASSWORD)
-        print '[%s] Created client %s, %s -> %s for %s' % (
-        time.ctime(), c['tun_name'], c['tun_ip'], c['tun_peer'], self.addr)
-        try:
-            if sys.platform == 'darwin':
-                from iptables import osx_client_init
-                osx_client_init()
-                
-        except:
-            pass
 
         while True:
             try:
@@ -351,55 +368,35 @@ class Client():
                 if now - self.active_time > 60:  # If no packets within 60 secs, Force relogin, NAT problem, Just keepalive
                     self.active_time = now
                     self.logged = False
-                if not self.logged and time.time() - self.log_time > 2.:
-                    d = {
-                        'password': SHARED_PASSWORD,
-                        'tun_ip': IFACE_IP,
-                        'tun_peer': IFACE_PEER,
-                    }
-                    data = pickle.dumps(d)
-                    self.udpfd.sendto('AUTH' + data, tuple(self.addr))
-                    self.log_time = now
-                    print "[%s] Do login ..." % (time.ctime(),)
-
-                rset = select.select([self.udpfd, self.tunfd], [], [], 1)[0]
+                    if now - self.login_success_time > 180:
+                        self.session['type'] = 'icmp'
+                if not self.logged and now - self.log_time > 2.:
+                    self.do_login()
+                rset = select.select([self.udpfd, self.icmpfd, self.tunfd], [], [], 1)[0]
                 for r in rset:
                     if r == self.tunfd:
-                        if DEBUG: os.write(1, ">")
                         data = os.read(self.tunfd, BUFFER_SIZE)
-                        data = cipher.encrypt(data)
+                        data = self.cipher.encrypt(data)
                         if not self.session_id:
                             print '还未登陆，无法发送网卡数据'
                             continue
                         ex_str = struct.pack('!LH', self.session_id, IPPacket.checksum(
                             data + struct.pack('!d', time.time())
                         ))
-                        dst = struct.unpack('!I', data[20:24])[0]
-                        addr = self.get_router_by_dst(dst)
+                        # dst = struct.unpack('!I', data[20:24])[0]
+                        # addr = self.get_router_by_dst(dst)
+                        print 'new packet from:%s' % socket.inet_ntoa(data[20:24])
+
                         try:
                             data += ex_str
                             for _ in xrange(2):
-                                self.udpfd.sendto(data, tuple(addr))
+                                self.send(data)
                         except:
                             pass
                     elif r == self.udpfd:
-                        if DEBUG: os.write(1, "<")
-                        data, src = self.udpfd.recvfrom(BUFFER_SIZE)
-                        if data.startswith("AUTH"):
-                            self.do_login(data)
-                        elif data.startswith('RTBL'):
-                            self.update_routes(data)
-                        else:
-                            if data and len(data) < 6:
-                                continue
-                            session_id, chksum = struct.unpack('!LH', data[-6:])
-                            if chksum in recv_ids:
-                                if time.time() - recv_ids[chksum] < 1:
-                                    # 再次在1秒内接到一样id的数据包丢弃,后续需要通过动态计算延时来更改
-                                    continue
-                            recv_ids[chksum] = time.time()
-                            os.write(self.tunfd, cipher.decrypt(data[:-6]))
-                            self.active_time = now
+                        self.parse_recv('udp')
+                    elif r == self.icmpfd:
+                        self.parse_recv('icmp')
             except socket_error, e:
                 print e.errno, e
                 if e.errno == 50 or e.errno == 51:
@@ -407,7 +404,7 @@ class Client():
 
 
 def usage(status=0):
-    print "Usage: %s [-s port|-c serverip] [-hd] [-l localip]" % (sys.argv[0])
+    print "Usage: %s [-s port|-c serverip] [-hd] [-l localip] [-a udp or icmp]" % (sys.argv[0])
     sys.exit(status)
 
 
@@ -416,7 +413,8 @@ def on_exit(no, info):
 
 
 if __name__ == "__main__":
-    opts = getopt.getopt(sys.argv[1:], "s:c:l:p:hd")
+    opts = getopt.getopt(sys.argv[1:], "s:c:l:p:a:hd")
+    action = 'udp'
     for opt, optarg in opts[0]:
         if opt == "-h":
             usage()
@@ -434,15 +432,17 @@ if __name__ == "__main__":
             IFACE_IP = optarg
         elif opt == "-p":
             IFACE_PEER = optarg
+        elif opt == '-a':
+            action = 'icmp'
 
     if MODE == 0 or PORT == 0:
         usage(1)
 
     signal.signal(signal.SIGTERM, on_exit)
     if MODE == 1:
-        tun = Server()
+        tun = Server(PORT)
     else:
-        tun = Client()
+        tun = Client(server_ip=IP, server_port=PORT, tun_ip=IFACE_IP, tun_peer=IFACE_PEER, action=action)
     try:
         tun.run()
     except KeyboardInterrupt:
