@@ -199,8 +199,10 @@ class Tunnel(object):
 
     def run(self):
         while True:
-            events = self.epoll.poll(30)
+            events = self.epoll.poll(20)
             if len(events) == 0:
+                ipk = ICMPPacket.create(self.icmp_type, 0, self.NowIdentity, self.seqno, 'keeplive').dumps()
+                self.icmpfd.sendto(ipk, (self.DesIp, 22))
                 continue
             for fileno, event in events:
                 try:
