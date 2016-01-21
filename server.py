@@ -2,36 +2,27 @@
 
 import os, sys
 import getopt
-import fcntl
-import icmp_s
-import struct
+import icmp
 import socket
 import select
+from tun import Tun
 
-TUNSETIFF = -2147199798
-IFF_TUN   = 0x0001
-IFACE_IP = "10.1.2.1/24"
+TUN_IP = "10.1.2.1"
+TUN_PEER = '10.1.2.2'
 MTU = 65000
 
 
 class Tunnel():
-    def create(self):
-        self.tfd = os.open("/dev/net/tun", os.O_RDWR)
-        ifs = fcntl.ioctl(self.tfd, TUNSETIFF, struct.pack("16sH", "t%d", IFF_TUN))
-        self.tname = ifs[:16].strip("\x00")
+    def create(self, tun_ip, tun_peer):
+        self.tfd, self.tname = Tun().create_tun(tun_ip, tun_peer)
 
     def close(self):
         os.close(self.tfd)
 
-    def config(self, ip):
-        os.system("ip link set %s up" % (self.tname))
-        os.system("ip link set %s mtu 1396" % (self.tname))
-        os.system("ip addr add %s dev %s" % (ip, self.tname))
-
     def run(self):
         self.icmpfd = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
         self.icmpfd.setblocking(0)
-        packet = icmp_s.ICMPPacket()
+        packet = icmp.ICMPPacket()
         now_identity = 0xffff
         self.server_ip = '0.0.0.0'
         while True:
@@ -39,8 +30,8 @@ class Tunnel():
             for r in rset:
                 if r == self.tfd:
                     data = os.read(self.tfd, MTU)
-                    #server
-                    #buf = packet.createByServer(now_identity,0x4147, data)
+                    # server
+                    # buf = packet.createByServer(now_identity,0x4147, data)
                     buf = packet.create(0, 0, now_identity, 0x4147, data)
                     try:
                         # self.icmpfd.send(buf)
@@ -49,9 +40,9 @@ class Tunnel():
                     except:
                         print 'error data len:', len(buf), buf[-10:]
                 elif r == self.icmpfd:
-                    buf = self.icmpfd.recv(icmp_s.BUFFER_SIZE)
+                    buf = self.icmpfd.recv(icmp.BUFFER_SIZE)
                     data = packet.parse(buf, True)
-                    if packet.seqno == 0x4147:  #True packet
+                    if packet.seqno == 0x4147:  # True packet
                         now_identity = packet.id
                         src = buf[12:16]
                         now_server_ip = socket.inet_ntoa(src)
@@ -61,17 +52,18 @@ class Tunnel():
 
 
 if __name__ == "__main__":
-    opts = getopt.getopt(sys.argv[1:], "s:c:l:hd")
+    opts = getopt.getopt(sys.argv[1:], "l:p")
     for opt, optarg in opts[0]:
         if opt == "-l":
-            IFACE_IP = optarg
+            TUN_IP = optarg
+        elif opt == '-p':
+            TUN_PEER = optarg
 
     tun = Tunnel()
-    tun.create()
+    tun.create(TUN_IP, TUN_PEER)
     print "Allocated interface %s" % (tun.tname)
-    tun.config(IFACE_IP)
     try:
         tun.run()
     except KeyboardInterrupt:
         tun.close()
-        sys.exit(0)    
+        sys.exit(0)
