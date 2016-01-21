@@ -21,42 +21,18 @@ import ctypes
 import binascii
 import cPickle as pickle
 import re
-
-TUNSETIFF = 0x400454ca
-IFF_TUN   = 0x0001 | 0x1000 #TUN + NO_PI
+from tun import Tun
 
 BUFFER_SIZE = 8192
 MODE = 0
-DEBUG = 0
 PORT = 0
 IFACE_IP = "10.0.0.1"
 IFACE_PEER = "10.0.0.2"
-MTU = 1400
-TIMEOUT = 60*10 # seconds
-RT_INTERVAL = 30 # seconds
-ipstr2int = lambda x: struct.unpack('!I', socket.inet_aton(x))[0]
 
 class Server():
     """
     python test.py  -s 1111 -l 192.168.128.1
     """
-    def create_tun(self):
-        """For every client, we create a P2P interface for it."""
-        try:
-            tun_fd = os.open("/dev/net/tun", os.O_RDWR)
-        except:
-            tun_fd = os.open("/dev/tun", os.O_RDWR)
-        if tun_fd < 0:
-            raise Exception('Failed to create tun device')
-        ifs = fcntl.ioctl(tun_fd, TUNSETIFF, struct.pack("16sH", "tun%d", IFF_TUN))
-        tname = ifs[:16].strip("\x00")
-        return tun_fd, tname
-    
-    def config_tun(self, tun_name, tun_ip, tun_peer):
-        """Set up IP address and P2P address"""
-        print "Configuring interface %s with ip %s" % (tun_name, tun_ip)
-        os.system("ifconfig %s %s dstaddr %s mtu %s up" % (tun_name, tun_ip, tun_peer, MTU))
-
     def run(self):
         """ Server packets loop """
         global PORT
@@ -65,8 +41,7 @@ class Server():
         self.sessions = []
         self.rt_sync_time = 0
         now_addr = ('0.0.0.0', 1)
-        tun_fd, tname = self.create_tun()
-        self.config_tun(tname, "10.0.0.1", "10.0.0.2")
+        tun_fd, _ = Tun().create_tun(IFACE_IP, IFACE_PEER)
 
         print 'Server listen at port', PORT
         while True:
@@ -85,36 +60,10 @@ class Client():
     """
     python test.py -c 192.168.35.145,1111 -l 192.168.128.2 -p 192.168.128.1
     """
-    def create_tun(self):
-        """ Every client needs a tun interface """
-        if sys.platform == 'darwin':
-            for i in xrange(10):
-                try:
-                    tname = 'tun%s' % i
-                    tun_fd = os.open('/dev/%s' % tname, os.O_RDWR)
-                    break
-                except:
-                    continue
-        else:
-            try:
-                tun_fd = os.open("/dev/net/tun", os.O_RDWR)
-            except:
-                tun_fd = os.open("/dev/tun", os.O_RDWR)
-            ifs = fcntl.ioctl(tun_fd, TUNSETIFF, struct.pack("16sH", "t%d", IFF_TUN))
-            tname = ifs[:16].strip("\x00")
-
-        return tun_fd, tname
-    
-    def config_tun(self, tun_name, tun_ip, tun_peer):
-        """ Set up local ip and peer ip """
-        print "Configuring interface %s with ip %s" % (tun_name, tun_ip)
-        os.system("ifconfig %s %s/32 %s mtu %s up" % (tun_name, tun_ip, tun_peer, MTU))
-
     def run(self):
         """ Client network loop """
         global PORT
-        tun_fd, tname = self.create_tun()
-        self.config_tun(tname, "10.0.0.2", "10.0.0.1")
+        tun_fd, tname = Tun().create_tun(IFACE_IP, IFACE_PEER)
         self.tunfd = tun_fd
         self.udpfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udpfd.bind(("", 0))
@@ -139,12 +88,10 @@ def on_exit(no, info):
     raise Exception("TERM signal caught!")
 
 if __name__=="__main__":
-    opts = getopt.getopt(sys.argv[1:],"s:c:l:p:hd")
+    opts = getopt.getopt(sys.argv[1:],"s:c:l:p:h")
     for opt,optarg in opts[0]:
         if opt == "-h":
             usage()
-        elif opt == "-d":
-            DEBUG += 1
         elif opt == "-s":
             MODE = 1
             PORT = int(optarg)
