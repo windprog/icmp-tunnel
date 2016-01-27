@@ -11,7 +11,7 @@ from tun import Tun
 
 TUN_IP = "10.1.2.2"
 TUN_PEER = '10.1.2.1'
-MTU = 65000
+BUFFER_SIZE = 8192
 
 
 class Tunnel():
@@ -34,9 +34,10 @@ class Tunnel():
         try:
             self.server_ip = socket.getaddrinfo(self.IP_DOMAIN, None)[0][4][0]
             if time.time() - self.heartbeat > 3:
-                self.icmpfd.sendto(self.packet.create(8, 0, self.now_identity, 0x4147, 'heartbeat'), (self.server_ip, 1))
+                buf = self.packet.create(8, 0, self.now_identity, 0x4147, 'heartbeat'*10)
+                self.icmpfd.sendto(buf, (self.server_ip, 1))
                 self.heartbeat = time.time()
-            print 'send heartbeat to server:%s' % self.server_ip
+                print 'send heartbeat to server:%s len:%s' % (self.server_ip, len(buf))
         except:
             print 'send heartbeat error!'
 
@@ -45,7 +46,7 @@ class Tunnel():
             rset = select.select([self.icmpfd, self.tfd], [], [], 3)[0]
             for r in rset:
                 if r == self.tfd:
-                    data = os.read(self.tfd, MTU)
+                    data = os.read(self.tfd, BUFFER_SIZE)
                     buf = self.packet.create(8, 0, self.now_identity, 0x4147, data)
                     try:
                         print 'send ip', self.server_ip, 'length', len(data)
@@ -54,7 +55,7 @@ class Tunnel():
                         print 'error data len:', len(buf), buf[-10:]
 
                 elif r == self.icmpfd:
-                    buf = self.icmpfd.recv(icmp.BUFFER_SIZE)
+                    buf = self.icmpfd.recv(BUFFER_SIZE)
                     data = self.packet.parse(buf, True)
                     if self.packet.seqno == 0x4147:  # true password
                         self.heartbeat = time.time()

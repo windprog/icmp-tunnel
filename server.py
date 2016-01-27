@@ -11,7 +11,7 @@ from tun import Tun
 
 TUN_IP = "10.1.2.1"
 TUN_PEER = '10.1.2.2'
-MTU = 65000
+BUFFER_SIZE = 8192
 
 
 class Tunnel():
@@ -32,7 +32,7 @@ class Tunnel():
             rset = select.select([self.icmpfd, self.tfd], [], [])[0]
             for r in rset:
                 if r == self.tfd:
-                    data = os.read(self.tfd, MTU)
+                    data = os.read(self.tfd, BUFFER_SIZE)
                     buf = self.packet.create(0, 0, self.now_identity, 0x4147, data)
                     try:
                         print 'send ip', self.server_ip, 'length', len(data)
@@ -40,7 +40,7 @@ class Tunnel():
                     except:
                         print 'error data len:', len(buf), buf[-10:]
                 elif r == self.icmpfd:
-                    buf = self.icmpfd.recv(icmp.BUFFER_SIZE)
+                    buf = self.icmpfd.recv(BUFFER_SIZE)
                     data = self.packet.parse(buf, True)
                     if self.packet.seqno == 0x4147:  # True packet
                         self.now_identity = self.packet.id
@@ -48,7 +48,7 @@ class Tunnel():
                         now_server_ip = socket.inet_ntoa(src)
                         if now_server_ip != self.server_ip:
                             self.server_ip = now_server_ip
-                        if data == 'heartbeat':
+                        if data.startswith('heartbeat') and data.endswith('heartbeat'):
                             print 'recv heartbeat from %s time:%s' % (now_server_ip, time.time())
                             continue
                         os.write(self.tfd, data)

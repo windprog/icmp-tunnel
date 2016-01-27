@@ -126,4 +126,3 @@ def testping(ipaddress):
 
 if __name__=="__main__":
     testping("192.168.216.132")
-
