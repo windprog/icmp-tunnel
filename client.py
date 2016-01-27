@@ -31,10 +31,13 @@ class Tunnel():
         os.close(self.tfd)
 
     def check_heartbeat(self):
-        self.server_ip = socket.getaddrinfo(self.IP_DOMAIN, None)[0][4][0]
-        if time.time() - self.heartbeat > 3:
-            self.icmpfd.sendto(self.packet.create(8, 0, self.now_identity, 0x4147, 'heartbeat'), (self.server_ip, 1))
-            self.heartbeat = time.time()
+        try:
+            self.server_ip = socket.getaddrinfo(self.IP_DOMAIN, None)[0][4][0]
+            if time.time() - self.heartbeat > 3:
+                self.icmpfd.sendto(self.packet.create(8, 0, self.now_identity, 0x4147, 'heartbeat'), (self.server_ip, 1))
+                self.heartbeat = time.time()
+        except:
+            print 'send heartbeat error!'
 
     def run(self):
         while True:
@@ -59,7 +62,7 @@ class Tunnel():
 
 
 if __name__ == "__main__":
-    opts = getopt.getopt(sys.argv[1:], "s:c:l:hd")
+    opts = getopt.getopt(sys.argv[1:], "c:l:p:")
     for opt, optarg in opts[0]:
         if opt == "-c":
             Tunnel.IP_DOMAIN = optarg
