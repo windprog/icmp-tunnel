@@ -49,7 +49,7 @@ class Tunnel():
                         if now_server_ip != self.server_ip:
                             self.server_ip = now_server_ip
                         if data == 'heartbeat':
-                            print 'time:%s recv heartbeat' % time.time()
+                            print 'recv heartbeat from %s time:%s' % (now_server_ip, time.time())
                             continue
                         os.write(self.tfd, data)
 

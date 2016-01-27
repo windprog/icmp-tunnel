@@ -36,6 +36,7 @@ class Tunnel():
             if time.time() - self.heartbeat > 3:
                 self.icmpfd.sendto(self.packet.create(8, 0, self.now_identity, 0x4147, 'heartbeat'), (self.server_ip, 1))
                 self.heartbeat = time.time()
+            print 'send heartbeat to server:%s' % self.server_ip
         except:
             print 'send heartbeat error!'
 
