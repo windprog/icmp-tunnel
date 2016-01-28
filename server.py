@@ -53,7 +53,7 @@ class Tunnel(BaseTunnel):
 
 
 if __name__ == "__main__":
-    opts = getopt.getopt(sys.argv[1:], "l:p:")
+    opts = getopt.getopt(sys.argv[1:], "l:p:d:")
     for opt, optarg in opts[0]:
         if opt == "-l":
             TUN_IP = optarg

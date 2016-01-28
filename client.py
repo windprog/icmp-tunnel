@@ -61,7 +61,7 @@ class Tunnel(BaseTunnel):
 
 
 if __name__ == "__main__":
-    opts = getopt.getopt(sys.argv[1:], "c:l:p:")
+    opts = getopt.getopt(sys.argv[1:], "c:l:p:d:")
     for opt, optarg in opts[0]:
         if opt == "-c":
             Tunnel.IP_DOMAIN = optarg
