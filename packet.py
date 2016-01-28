@@ -11,7 +11,7 @@ Desc    :
 """
 import socket
 import struct
-import ctypes
+from icmp import checksum as no_ctypes_checksum
 
 BUFFER_SIZE = 8192
 
@@ -52,6 +52,12 @@ class IPPacket(object):
     def loads(self, buf):
         self.ttl, self.proto, self.chksum = struct.unpack("!BBH", buf[8:12])
         self._src, self._dst = buf[12:16], buf[16:20]
+
+
+try:
+    import ctypes
+except:
+    IPPacket._checksum = no_ctypes_checksum
 
 
 class ICMPPacket(IPPacket):
