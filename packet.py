@@ -26,9 +26,9 @@ class IPPacket(object):
         self.ttl, self.proto, self.chksum, self._src, self._dst = [None for _ in range(5)]
         if buf:
             self.loads(buf)
-            if self.DEBUG:
-                print "parse IP ttl=", self.ttl, "proto=", self.proto, \
-                    "_src=", socket.inet_ntoa(self.src), "dst=", socket.inet_ntoa(self.dst)
+        if buf and self.DEBUG:
+            print "parse IP ttl=", self.ttl, "proto=", self.proto, \
+                "_src=", socket.inet_ntoa(self.src), "dst=", socket.inet_ntoa(self.dst)
 
     src = property(lambda self: socket.inet_ntoa(self._src),
                    lambda self, value: setattr(self, "_src", socket.inet_aton(value)))
@@ -71,7 +71,7 @@ class ICMPPacket(IPPacket):
         self.type, self.code, self.chksum, self.id, self.seqno = [None for _ in range(5)]
         self._data = ""
         super(ICMPPacket, self).__init__(buf)
-        if self.DEBUG:
+        if buf and self.DEBUG:
             print "parse ICMP type=", self.type, "code=", self.code, "id=", self.id, "seqno=", self.seqno
 
     def loads(self, buf):
@@ -97,7 +97,7 @@ class TunnelPacket(ICMPPacket):
         self.session_id = 0  # 保留字段,用于判断来源
         self.data_list = []
         super(TunnelPacket, self).__init__(buf)
-        if self.DEBUG:
+        if buf and self.DEBUG:
             print "parse Tunnel session_id=", self.session_id, "data_count", len(self.data_list)
 
     def loads(self, buf):

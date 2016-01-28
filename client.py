@@ -5,6 +5,7 @@ import getopt
 import socket
 import select
 import time
+import traceback
 from sender import BaseTunnel
 from packet import TunnelPacket
 
@@ -48,7 +49,11 @@ class Tunnel(BaseTunnel):
                         print 'error data len:', len(buf), type(e)
                 elif r == self.icmpfd:
                     buf = self.recv()
-                    packet = TunnelPacket(buf)
+                    try:
+                        packet = TunnelPacket(buf)
+                    except:
+                        print traceback.format_exc()
+                        continue
                     if packet.seqno == 0x4147:  # True packet
                         self.heartbeat = time.time()
                         data_list = packet.data_list
