@@ -23,7 +23,7 @@ class Tunnel(BaseTunnel):
     def recv_heartbeat(self, req_data):
         print 'recv heartbeat from %s time:%s' % (self.server_ip, time.time())
         res_data = "res:" + req_data[4:]
-        self.icmpfd.sendto(self.get_server_data(res_data), (self.server_ip, 1))
+        self.send(self.get_server_data(res_data))
 
     def run(self):
         self.server_ip = '0.0.0.0'
@@ -45,16 +45,15 @@ class Tunnel(BaseTunnel):
                     except:
                         print traceback.format_exc()
                         continue
-                    if packet.seqno == 0x4147:  # True packet
-                        self.now_identity = packet.id
-                        self.server_ip = packet.src
-                        data_list = packet.data_list
-                        if data_list and data_list[0].startswith('req:'):
-                            # control request
-                            self.recv_heartbeat(data_list[0])
-                            data_list = data_list[1:]
-                        for one_data in data_list:
-                            os.write(self.tfd, one_data)
+                    self.now_identity = packet.id
+                    self.server_ip = packet.src
+                    data_list = packet.data_list
+                    for one_data in data_list:
+                        if one_data.startswith('res:') or one_data.startswith('req:'):
+                            if one_data.startswith('req:'):
+                                self.recv_heartbeat(one_data)
+                            continue
+                        os.write(self.tfd, one_data)
 
 
 if __name__ == "__main__":

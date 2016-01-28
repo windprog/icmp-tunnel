@@ -54,14 +54,12 @@ class Tunnel(BaseTunnel):
                     except:
                         print traceback.format_exc()
                         continue
-                    if packet.seqno == 0x4147:  # True packet
-                        self.heartbeat = time.time()
-                        data_list = packet.data_list
-                        if data_list and data_list[0].startswith('res:'):
-                            # control response
-                            data_list = data_list[1:]
-                        for one_data in data_list:
-                            os.write(self.tfd, one_data)
+                    self.heartbeat = time.time()
+                    data_list = packet.data_list
+                    for one_data in data_list:
+                        if one_data.startswith('res:') or one_data.startswith('req:'):
+                            continue
+                        os.write(self.tfd, one_data)
             self.check_heartbeat()
 
 
