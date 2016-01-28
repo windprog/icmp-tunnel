@@ -52,6 +52,10 @@ class IPPacket(object):
         total = (total >> 16) + (total & 0xffff)
         total += total >> 16
         return ctypes.c_ushort(~total).value
+    
+    @staticmethod
+    def no_ctypes_checksum(data):
+        return no_ctypes_checksum(data)
 
     def loads(self, buf):
         self.ttl, self.proto, self.chksum = struct.unpack("!BBH", buf[8:12])
@@ -61,7 +65,7 @@ class IPPacket(object):
 try:
     import ctypes
 except:
-    IPPacket._checksum = no_ctypes_checksum
+    IPPacket.checksum = IPPacket.no_ctypes_checksum
 
 
 class ICMPPacket(IPPacket):
