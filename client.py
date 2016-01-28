@@ -9,8 +9,6 @@ from sender import BaseTunnel
 
 TUN_IP = "10.1.2.2"
 TUN_PEER = '10.1.2.1'
-BUFFER_SIZE = 8192
-MIN_PACKET_SIZE = 16
 
 
 class Tunnel(BaseTunnel):
