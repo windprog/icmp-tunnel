@@ -45,7 +45,7 @@ class Tunnel(BaseTunnel):
                     try:
                         self.send(buf)
                     except Exception, e:
-                        self.pending_list.append(buf)
+                        self.pending_list.append(data)
                         print 'error data len:', len(buf), type(e)
                 elif r == self.icmpfd:
                     buf = self.recv()

@@ -23,7 +23,12 @@ class Tunnel(BaseTunnel):
     def recv_heartbeat(self, req_data):
         print 'recv heartbeat from %s time:%s' % (self.server_ip, time.time())
         res_data = "res:" + req_data[4:]
-        self.send(self.get_server_data(res_data))
+        buf = self.get_server_data(res_data)
+        try:
+            self.send(buf)
+        except Exception, e:
+            self.pending_list.append(res_data)
+            print 'error data len:', len(buf), type(e)
 
     def run(self):
         self.server_ip = '0.0.0.0'
@@ -36,7 +41,7 @@ class Tunnel(BaseTunnel):
                     try:
                         self.send(buf)
                     except Exception, e:
-                        self.pending_list.append(buf)
+                        self.pending_list.append(data)
                         print 'error data len:', len(buf), type(e)
                 elif r == self.icmpfd:
                     buf = self.recv()
