@@ -36,8 +36,8 @@ class IPPacket(object):
     dst = property(lambda self: socket.inet_ntoa(self._dst),
                    lambda self, value: setattr(self, "_dst", socket.inet_aton(value)))
 
-    @staticmethod
-    def checksum(data):
+    @classmethod
+    def checksum(cls, data):
         if len(data) % 2:
             odd_byte = ord(data[-1])
             data = data[:-1]
@@ -53,8 +53,8 @@ class IPPacket(object):
         total += total >> 16
         return ctypes.c_ushort(~total).value
     
-    @staticmethod
-    def no_ctypes_checksum(data):
+    @classmethod
+    def no_ctypes_checksum(cls, data):
         return no_ctypes_checksum(data)
 
     def loads(self, buf):
