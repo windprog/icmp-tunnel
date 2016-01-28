@@ -26,9 +26,9 @@ class IPPacket(object):
         self.ttl, self.proto, self.chksum, self._src, self._dst = [None for _ in range(5)]
         if buf:
             self.loads(buf)
-        if self.DEBUG:
-            print "parse IP ttl=", self.ttl, "proto=", self.proto, "src=", socket.inet_ntoa(self.src), \
-                "dst=", socket.inet_ntoa(self.dst)
+            if self.DEBUG:
+                print "parse IP ttl=", self.ttl, "proto=", self.proto, \
+                    "_src=", socket.inet_ntoa(self.src), "dst=", socket.inet_ntoa(self.dst)
 
     src = property(lambda self: socket.inet_ntoa(self._src),
                    lambda self, value: setattr(self, "_src", socket.inet_aton(value)))
