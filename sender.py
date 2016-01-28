@@ -13,7 +13,6 @@ import os
 from tun import Tun
 from packet import TunnelPacket
 
-DEFAULT_MIN_ICMP_SIZE = 24
 BUFFER_SIZE = 8192
 
 
@@ -38,8 +37,6 @@ class BaseTunnel(object):
         self.pending_list = []
         data_list = pending_list + [data]
         result = TunnelPacket.create(_type, 0, self.now_identity, 0x4147, data_list=data_list).dumps()
-        if len(result) < DEFAULT_MIN_ICMP_SIZE:
-            result += 'q' * (DEFAULT_MIN_ICMP_SIZE - len(result))
         return result
         # return self.packet.create(0, 0, self.now_identity, 0x4147, data)
 

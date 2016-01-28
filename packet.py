@@ -13,6 +13,7 @@ import socket
 import struct
 from icmp import checksum as no_ctypes_checksum
 
+DEFAULT_MIN_ICMP_SIZE = 32
 BUFFER_SIZE = 8192
 
 
@@ -76,7 +77,7 @@ class ICMPPacket(IPPacket):
         self._data = ""
         super(ICMPPacket, self).__init__(buf)
         if buf and self.DEBUG:
-            print "parse ICMP type=", self.type, "code=", self.code, "id=", self.id, "seqno=", self.seqno
+            print "parse ICMP type=", self.type, "code=", self.code, "checksum=", self.chksum, "id=", self.id, "seqno=", self.seqno
 
     def loads(self, buf):
         IPPacket.loads(self, buf)
@@ -96,6 +97,7 @@ class ICMPPacket(IPPacket):
 
 
 class TunnelPacket(ICMPPacket):
+    ICMP_FMT = '!BBHHH'
     def __init__(self, buf=None):
         # 载入二进制数据或者创建空对象
         self.session_id = 0  # 保留字段,用于判断来源
@@ -142,9 +144,16 @@ class TunnelPacket(ICMPPacket):
         for data in self.data_list:
             assert len(data) < 65535
             data_args.extend((len(data), data))
-        args = [self.type, self.code, 0, self.id, self.seqno, self.session_id] + data_args
-        args[2] = IPPacket.checksum(struct.pack(packfmt, *args))
-        return struct.pack(packfmt, *args)
+        icmp_args = [self.type, self.code, 0, self.id, self.seqno]
+        args = icmp_args + [self.session_id] + data_args
+        # 最小包
+        hop_result = struct.pack(packfmt, *args)
+        if len(hop_result) < DEFAULT_MIN_ICMP_SIZE:
+            hop_result += '-' * (DEFAULT_MIN_ICMP_SIZE - len(hop_result))
+        # 重新计算checksum
+        icmp_args[2] = IPPacket.checksum(hop_result)
+        # 连结包头和主题数据
+        return struct.pack(self.ICMP_FMT, *icmp_args) + hop_result[8:]
 
 
 if __name__ == '__main__':
