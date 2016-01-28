@@ -2,29 +2,23 @@
 
 import os, sys
 import getopt
-import icmp
 import socket
 import select
 import time
-
-from tun import Tun
+from sender import BaseTunnel
 
 TUN_IP = "10.1.2.2"
 TUN_PEER = '10.1.2.1'
 BUFFER_SIZE = 8192
+MIN_PACKET_SIZE = 16
 
 
-class Tunnel():
+class Tunnel(BaseTunnel):
     IP_DOMAIN = 'xxxx.f3322.org'
 
     def __init__(self, tun_ip, tun_peer):
+        super(Tunnel, self).__init__(tun_ip, tun_peer)
         self.heartbeat = 0
-        self.tfd, self.tname = Tun().create_tun(tun_ip, tun_peer)
-        self.icmpfd = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-        self.icmpfd.setblocking(0)
-        self.packet = icmp.ICMPPacket()
-        self.now_identity = 0xffff
-        self.server_ip = ''
         self.check_heartbeat()
 
     def close(self):
@@ -34,31 +28,33 @@ class Tunnel():
         try:
             self.server_ip = socket.getaddrinfo(self.IP_DOMAIN, None)[0][4][0]
             if time.time() - self.heartbeat > 3:
-                buf = self.packet.create(8, 0, self.now_identity, 0x4147, 'heartbeat'*10)
-                self.icmpfd.sendto(buf, (self.server_ip, 1))
+                buf = self.get_client_data(self.heartbeat_data)
+                self.send(buf)
                 self.heartbeat = time.time()
                 print 'send heartbeat to server:%s len:%s' % (self.server_ip, len(buf))
         except:
-            print 'send heartbeat error!'
+            print 'send heartbeat error! domain:%s' % repr(self.IP_DOMAIN)
 
     def run(self):
         while True:
             rset = select.select([self.icmpfd, self.tfd], [], [], 3)[0]
             for r in rset:
                 if r == self.tfd:
-                    data = os.read(self.tfd, BUFFER_SIZE)
-                    buf = self.packet.create(8, 0, self.now_identity, 0x4147, data)
+                    data = self.read_from_tun()
+                    buf = self.get_client_data(data)
                     try:
-                        print 'send ip', self.server_ip, 'length', len(data)
-                        self.icmpfd.sendto(buf, (self.server_ip, 1))
-                    except:
-                        print 'error data len:', len(buf), buf[-10:]
+                        self.send(buf)
+                    except Exception, e:
+                        print 'error data len:', len(buf), type(e)
 
                 elif r == self.icmpfd:
-                    buf = self.icmpfd.recv(BUFFER_SIZE)
+                    buf = self.recv()
                     data = self.packet.parse(buf, True)
                     if self.packet.seqno == 0x4147:  # true password
                         self.heartbeat = time.time()
+                        if data.startswith('res:'):
+                            # control response
+                            continue
                         os.write(self.tfd, data)
             self.check_heartbeat()
 

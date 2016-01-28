@@ -2,29 +2,26 @@
 
 import os, sys
 import getopt
-import icmp
 import socket
 import select
 import time
-
-from tun import Tun
+from sender import BaseTunnel
 
 TUN_IP = "10.1.2.1"
 TUN_PEER = '10.1.2.2'
-BUFFER_SIZE = 8192
 
 
-class Tunnel():
+class Tunnel(BaseTunnel):
     def __init__(self, tun_ip, tun_peer):
-        self.tfd, self.tname = Tun().create_tun(tun_ip, tun_peer)
-        self.icmpfd = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-        self.icmpfd.setblocking(0)
-        self.packet = icmp.ICMPPacket()
-        self.now_identity = 0xffff
-        self.server_ip = ''
+        super(Tunnel, self).__init__(tun_ip, tun_peer)
 
     def close(self):
         os.close(self.tfd)
+
+    def recv_heartbeat(self, req_data):
+        print 'recv heartbeat from %s time:%s' % (self.server_ip, time.time())
+        buf = self.get_server_data(self.heartbeat_data)
+        self.icmpfd.sendto(self.get_server_data(buf), (self.server_ip, 1))
 
     def run(self):
         self.server_ip = '0.0.0.0'
@@ -32,24 +29,22 @@ class Tunnel():
             rset = select.select([self.icmpfd, self.tfd], [], [])[0]
             for r in rset:
                 if r == self.tfd:
-                    data = os.read(self.tfd, BUFFER_SIZE)
-                    buf = self.packet.create(0, 0, self.now_identity, 0x4147, data)
+                    data = self.read_from_tun()
+                    buf = self.get_server_data(data)
                     try:
-                        print 'send ip', self.server_ip, 'length', len(data)
-                        self.icmpfd.sendto(buf, (self.server_ip, 1))
-                    except:
-                        print 'error data len:', len(buf), buf[-10:]
+                        self.send(buf)
+                    except Exception, e:
+                        print 'error data len:', len(buf), type(e)
                 elif r == self.icmpfd:
-                    buf = self.icmpfd.recv(BUFFER_SIZE)
+                    buf = self.recv()
                     data = self.packet.parse(buf, True)
                     if self.packet.seqno == 0x4147:  # True packet
                         self.now_identity = self.packet.id
                         src = buf[12:16]
-                        now_server_ip = socket.inet_ntoa(src)
-                        if now_server_ip != self.server_ip:
-                            self.server_ip = now_server_ip
-                        if data.startswith('heartbeat') and data.endswith('heartbeat'):
-                            print 'recv heartbeat from %s time:%s' % (now_server_ip, time.time())
+                        self.server_ip = socket.inet_ntoa(src)
+                        if data.startswith('req:'):
+                            # control request
+                            self.recv_heartbeat(data)
                             continue
                         os.write(self.tfd, data)
 
