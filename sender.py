@@ -11,6 +11,7 @@ import icmp
 import socket
 import os
 from tun import Tun
+from packet import TunnelPacket
 
 DEFAULT_MIN_PACKET_SIZE = 16
 BUFFER_SIZE = 8192
@@ -21,10 +22,10 @@ class BaseTunnel(object):
         self.tfd, self.tname = Tun().create_tun(tun_ip, tun_peer)
         self.icmpfd = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
         self.icmpfd.setblocking(0)
-        self.packet = icmp.ICMPPacket()
         self.now_identity = 0xffff
         self.server_ip = ''
-        self.heartbeat_data = 'req:' + 'q' * (DEFAULT_MIN_PACKET_SIZE - 4 if DEFAULT_MIN_PACKET_SIZE > 4 else '')
+        self.heartbeat_data = 'req:'
+        self.pending_list = []
 
     def send(self, data):
         return self.icmpfd.sendto(data, (self.server_ip, 1))
@@ -32,11 +33,22 @@ class BaseTunnel(object):
     def recv(self):
         return self.icmpfd.recv(BUFFER_SIZE)
 
+    def _get_icmp_data(self, _type, data):
+        pending_list = self.pending_list
+        self.pending_list = []
+        data_list = pending_list + [data]
+        result = TunnelPacket.create(_type, 0, self.now_identity, 0x4147, data_list=data_list).dumps()
+        if len(result) < BUFFER_SIZE:
+            result += 'q' * (BUFFER_SIZE - len(result))
+        return result
+        # return self.packet.create(0, 0, self.now_identity, 0x4147, data)
+
     def get_server_data(self, data):
-        return self.packet.create(0, 0, self.now_identity, 0x4147, data)
+        self._get_icmp_data(0, data)
 
     def get_client_data(self, data):
-        return self.packet.create(8, 0, self.now_identity, 0x4147, data)
+        return self._get_icmp_data(8, data)
+        # return self.packet.create(8, 0, self.now_identity, 0x4147, data)
 
     def read_from_tun(self):
         return os.read(self.tfd, BUFFER_SIZE)

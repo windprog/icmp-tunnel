@@ -6,6 +6,7 @@ import socket
 import select
 import time
 from sender import BaseTunnel
+from packet import TunnelPacket
 
 TUN_IP = "10.1.2.1"
 TUN_PEER = '10.1.2.2'
@@ -20,8 +21,8 @@ class Tunnel(BaseTunnel):
 
     def recv_heartbeat(self, req_data):
         print 'recv heartbeat from %s time:%s' % (self.server_ip, time.time())
-        buf = self.get_server_data(self.heartbeat_data)
-        self.icmpfd.sendto(self.get_server_data(buf), (self.server_ip, 1))
+        res_data = "res:" + req_data[4:]
+        self.icmpfd.sendto(self.get_server_data(res_data), (self.server_ip, 1))
 
     def run(self):
         self.server_ip = '0.0.0.0'
@@ -34,19 +35,21 @@ class Tunnel(BaseTunnel):
                     try:
                         self.send(buf)
                     except Exception, e:
+                        self.pending_list.append(buf)
                         print 'error data len:', len(buf), type(e)
                 elif r == self.icmpfd:
                     buf = self.recv()
-                    data = self.packet.parse(buf, True)
-                    if self.packet.seqno == 0x4147:  # True packet
-                        self.now_identity = self.packet.id
-                        src = buf[12:16]
-                        self.server_ip = socket.inet_ntoa(src)
-                        if data.startswith('req:'):
+                    packet = TunnelPacket(buf)
+                    if packet.seqno == 0x4147:  # True packet
+                        self.now_identity = packet.id
+                        self.server_ip = packet.src
+                        data_list = packet.data_list
+                        if data_list and data_list[0].startswith('req:'):
                             # control request
-                            self.recv_heartbeat(data)
-                            continue
-                        os.write(self.tfd, data)
+                            self.recv_heartbeat(data_list[0])
+                            data_list = data_list[1:]
+                        for one_data in data_list:
+                            os.write(self.tfd, one_data)
 
 
 if __name__ == "__main__":
@@ -56,6 +59,8 @@ if __name__ == "__main__":
             TUN_IP = optarg
         elif opt == '-p':
             TUN_PEER = optarg
+        elif opt == '-d':
+            TunnelPacket.DEBUG = True
 
     tun = Tunnel(TUN_IP, TUN_PEER)
     print "Allocated interface %s" % (tun.tname)
