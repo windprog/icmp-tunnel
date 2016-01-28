@@ -44,7 +44,7 @@ class BaseTunnel(object):
         # return self.packet.create(0, 0, self.now_identity, 0x4147, data)
 
     def get_server_data(self, data):
-        self._get_icmp_data(0, data)
+        return self._get_icmp_data(0, data)
 
     def get_client_data(self, data):
         return self._get_icmp_data(8, data)
