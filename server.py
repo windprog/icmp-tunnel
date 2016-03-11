@@ -14,9 +14,13 @@ import socket
 import select
 import time
 import traceback
+import platform
+
 from interface import BaseSender
 from icmp_sender import ServerICMPSender, ClientICMPSender
 from tun_sender import TunInstance
+from poll import Poll, BasePoll
+
 
 TUN_IP = "10.1.2.1"
 TUN_PEER = '10.1.2.2'
@@ -26,6 +30,10 @@ class SelectTunnel(object):
     def __init__(self, pkg_sender, tun_sender):
         self.pkg_sender = pkg_sender
         self.tun_sender = tun_sender
+        self.poll = Poll()
+        self.poll.add(self.pkg_sender.fd())
+        self.poll.add(self.tun_sender.fd())
+        assert isinstance(self.poll, BasePoll)
         assert isinstance(pkg_sender, BaseSender)
         assert isinstance(tun_sender, BaseSender)
 
@@ -33,7 +41,7 @@ class SelectTunnel(object):
         self.last_recv = 0
 
     def close(self):
-        os.close(self.tun_sender.tfd())
+        os.close(self.tun_sender.fd())
 
     def forever(self):
         self.server_ip = '0.0.0.0'
@@ -41,19 +49,24 @@ class SelectTunnel(object):
             self.process()
 
     def process(self):
-        rset = select.select([self.pkg_sender.tfd(), self.tun_sender.tfd()], [], [], 0.01)[0]
-        for r in rset:
-            if r == self.tun_sender.tfd():
+        # rset = select.select([self.pkg_sender.tfd(), self.tun_sender.tfd()], [], [], 0.01)[0]
+        # for r in rset:
+        for fileno, event in self.poll.wait(timeout=0.01):
+            fd = self.poll.fmap.get(fileno)
+            if fd == self.tun_sender.fd():
                 # tun 模块收到数据
                 for data in self.tun_sender.recv():
                     # 这里没有实现读到不能读,需要重构一下
                     self.pkg_sender.send(data)
-            elif r == self.pkg_sender.tfd():
+            elif fd == self.pkg_sender.fd():
                 # 网络收到数据
                 now = time.time()
                 for data in self.pkg_sender.recv():
                     self.last_recv = now
-                    os.write(self.tun_sender.tfd(), data)
+                    os.write(self.tun_sender.fd(), data)
+
+    # select parse
+
 
 
 class ServerTunnel(SelectTunnel):

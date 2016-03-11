@@ -30,7 +30,7 @@ class BaseSender(object):
         pass
 
     @abstractmethod
-    def tfd(self):
+    def fd(self):
         pass
 
     def __str__(self):

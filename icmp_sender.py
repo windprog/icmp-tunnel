@@ -55,7 +55,7 @@ class ICMPSender(BaseSender):
             return []
         return data_list
 
-    def tfd(self):
+    def fd(self):
         return self.icmpfd
 
 
@@ -86,9 +86,9 @@ if __name__ == '__main__':
     next_sleep_time = 0.01
 
     while True:
-        rset = select.select([sender.tfd()], [], [], next_sleep_time)[0]
+        rset = select.select([sender.fd()], [], [], next_sleep_time)[0]
         for r in rset:
-            if r == sender.tfd():
+            if r == sender.fd():
                 result = sender.recv()
                 print result, [len(item) for item in result]
                 sender.send('remote accept:' + result[0])

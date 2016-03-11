@@ -22,5 +22,5 @@ class TunInstance(BaseTun):
     def recv(self):
         return [os.read(self._tfd, BUFFER_SIZE)]
 
-    def tfd(self):
+    def fd(self):
         return self._tfd
