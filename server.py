@@ -15,12 +15,16 @@ import select
 import time
 import traceback
 import platform
-
 from interface import BaseSender
 from icmp_sender import ServerICMPSender, ClientICMPSender
 from tun_sender import TunInstance
-from poll import Poll, BasePoll
+from poll import OS
 
+if OS == 'freebsd' or OS == 'darwin':
+    # TODO bsd 兼容放入tun file no
+    from poll.default_poll import Poll, BasePoll
+else:
+    from poll import Poll, BasePoll
 
 TUN_IP = "10.1.2.1"
 TUN_PEER = '10.1.2.2'
@@ -63,9 +67,6 @@ class SelectTunnel(object):
                 for data in self.pkg_sender.recv():
                     self.last_recv = now
                     os.write(self.tun_sender.fd(), data)
-
-    # select parse
-
 
 
 class ServerTunnel(SelectTunnel):
