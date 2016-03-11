@@ -9,6 +9,7 @@ Desc    :
 """
 import time
 
+
 class CommandControl(object):
     def __init__(self, pkg_sender):
         self.pkg_sender = pkg_sender
@@ -22,3 +23,4 @@ class CommandControl(object):
         if data.startswith('res:') or data.startswith('req:'):
             if data.startswith('req:'):
                 self.recv_heartbeat(data)
+                return True

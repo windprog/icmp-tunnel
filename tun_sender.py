@@ -14,13 +14,13 @@ from tun import Tun
 
 class TunInstance(BaseTun):
     def __init__(self, tun_ip, tun_peer):
-        self.tfd, self.tname = Tun().create_tun(tun_ip, tun_peer)
+        self._tfd, self.tname = Tun().create_tun(tun_ip, tun_peer)
 
     def send(self, data):
-        os.write(self.tfd, data)
+        os.write(self._tfd, data)
 
     def recv(self):
-        return [os.read(self.tfd, BUFFER_SIZE)]
+        return [os.read(self._tfd, BUFFER_SIZE)]
 
     def tfd(self):
-        return self.tfd
+        return self._tfd

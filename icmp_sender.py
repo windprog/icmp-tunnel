@@ -21,7 +21,7 @@ class ICMPSender(BaseSender):
         self.now_identity = 0xffff
         self.server_ip = server_ip
         self.pending_list = []
-        self.icmp_type = 8
+        self.icmp_type = None
         self.cmd_control = CommandControl(self)
         self.debug = False
 
@@ -29,21 +29,30 @@ class ICMPSender(BaseSender):
         pending_list = self.pending_list
         self.pending_list = []
         data_list = pending_list + [data]
-        result = TunnelPacket.create(self.icmp_type, 0, self.now_identity, 0x4147, data_list=data_list).dumps()
+        icmp_code = 0
+        result = TunnelPacket.create(self.icmp_type, icmp_code, self.now_identity, 0x4147, data_list=data_list).dumps()
         if self.debug:
-            print 'send ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (self.server_ip, self.icmp_type, 0, self.now_identity, 0x4147, repr(data_list))
+            print 'send ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (self.server_ip, self.icmp_type, icmp_code, self.now_identity, 0x4147, repr(data_list))
         return self.icmpfd.sendto(result, (self.server_ip, 1))
 
     def recv(self):
         buf = self.icmpfd.recv(BUFFER_SIZE)
         packet = TunnelPacket(buf)
+        target_remote_icmp_type = ServerICMPSender.ICMP_TYPE if self.icmp_type == ClientICMPSender.ICMP_TYPE else \
+            ClientICMPSender.ICMP_TYPE
+        if packet.seqno != 0x4147 or packet.type != target_remote_icmp_type:
+            # 非正常数据
+            return []
+        if self.debug:
+            print 'recv from_ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (packet.src, packet.type, packet.code, packet.id, packet.seqno, repr(packet.data_list))
         self.now_identity = packet.id
         self.server_ip = packet.src
         data_list = packet.data_list
+        is_command = False
         for one_data in data_list:
-            self.cmd_control.check(one_data)
-        if self.debug:
-            print 'recv from_ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (packet.src, packet.type, packet.code, packet.id, packet.seqno, repr(packet.data_list))
+            is_command = self.cmd_control.check(one_data)
+        if is_command:
+            return []
         return data_list
 
     def tfd(self):
@@ -51,16 +60,18 @@ class ICMPSender(BaseSender):
 
 
 class ServerICMPSender(ICMPSender):
+    ICMP_TYPE = 18
     def __init__(self):
         super(ServerICMPSender, self).__init__()
-        self.icmp_type = 0
+        self.icmp_type = self.ICMP_TYPE
 
 
 class ClientICMPSender(ICMPSender):
+    ICMP_TYPE = 17
     def __init__(self, server_ip=''):
         # check_heartbeat 会设置server_ip
         super(ClientICMPSender, self).__init__(server_ip=server_ip)
-        self.icmp_type = 8
+        self.icmp_type = self.ICMP_TYPE
 
 
 if __name__ == '__main__':

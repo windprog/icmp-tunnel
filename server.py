@@ -29,6 +29,9 @@ class SelectTunnel(object):
         assert isinstance(pkg_sender, BaseSender)
         assert isinstance(tun_sender, BaseSender)
 
+        # vars
+        self.last_recv = 0
+
     def close(self):
         os.close(self.tun_sender.tfd())
 
@@ -38,7 +41,7 @@ class SelectTunnel(object):
             self.process()
 
     def process(self):
-        rset = select.select([self.pkg_sender.tfd(), self.tun_sender.tfd()], [], [])[0]
+        rset = select.select([self.pkg_sender.tfd(), self.tun_sender.tfd()], [], [], 0.01)[0]
         for r in rset:
             if r == self.tun_sender.tfd():
                 # tun 模块收到数据
@@ -47,7 +50,9 @@ class SelectTunnel(object):
                     self.pkg_sender.send(data)
             elif r == self.pkg_sender.tfd():
                 # 网络收到数据
+                now = time.time()
                 for data in self.pkg_sender.recv():
+                    self.last_recv = now
                     os.write(self.tun_sender.tfd(), data)
 
 
@@ -60,15 +65,16 @@ class ClientTunnel(SelectTunnel):
 
     def __init__(self, pkg_sender, tun_sender):
         super(ClientTunnel, self).__init__(pkg_sender, tun_sender)
-        self.heartbeat = 0
+
         self.heartbeat_data = 'req:'
         self.check_heartbeat()
 
     def check_heartbeat(self):
         try:
             self.pkg_sender.server_ip = socket.getaddrinfo(self.IP_DOMAIN, None)[0][4][0]
-            if time.time() - self.heartbeat > 3:
+            if time.time() - self.last_recv > 3:
                 self.pkg_sender.send(self.heartbeat_data)
+                self.last_recv = time.time()
         except:
             print 'send heartbeat error! domain:%s' % repr(self.IP_DOMAIN)
 
