@@ -31,6 +31,11 @@ class BaseSender(object):
 
     @abstractmethod
     def fd(self):
+        # 获取文件描述符
+        pass
+
+    def f(self):
+        # 获取文件
         pass
 
     def __str__(self):

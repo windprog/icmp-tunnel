@@ -31,8 +31,8 @@ class SelectTunnel(object):
         self.pkg_sender = pkg_sender
         self.tun_sender = tun_sender
         self.poll = Poll()
-        self.poll.add(self.pkg_sender.fd())
-        self.poll.add(self.tun_sender.fd())
+        self.poll.add(self.pkg_sender.f())
+        self.poll.register(self.tun_sender.fd())
         assert isinstance(self.poll, BasePoll)
         assert isinstance(pkg_sender, BaseSender)
         assert isinstance(tun_sender, BaseSender)
@@ -52,13 +52,12 @@ class SelectTunnel(object):
         # rset = select.select([self.pkg_sender.tfd(), self.tun_sender.tfd()], [], [], 0.01)[0]
         # for r in rset:
         for fileno, event in self.poll.wait(timeout=0.01):
-            fd = self.poll.fmap.get(fileno)
-            if fd == self.tun_sender.fd():
+            if fileno == self.tun_sender.fd():
                 # tun 模块收到数据
                 for data in self.tun_sender.recv():
                     # 这里没有实现读到不能读,需要重构一下
                     self.pkg_sender.send(data)
-            elif fd == self.pkg_sender.fd():
+            elif fileno == self.pkg_sender.fd():
                 # 网络收到数据
                 now = time.time()
                 for data in self.pkg_sender.recv():

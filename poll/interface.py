@@ -16,9 +16,10 @@ class BasePoll(object):
     def __init__(self):
         self.fmap = {}
 
-    def add(self, fd):
-        self.fmap[fd.fileno()] = fd
-        self.register(fd)
+    def add(self, f):
+        # 添加文件
+        self.fmap[f.fileno()] = f
+        self.register(f)
 
     @abstractmethod
     def register(self, f):

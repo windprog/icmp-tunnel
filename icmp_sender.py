@@ -55,8 +55,11 @@ class ICMPSender(BaseSender):
             return []
         return data_list
 
-    def fd(self):
+    def f(self):
         return self.icmpfd
+
+    def fd(self):
+        return self.icmpfd.fileno()
 
 
 class ServerICMPSender(ICMPSender):
@@ -86,9 +89,9 @@ if __name__ == '__main__':
     next_sleep_time = 0.01
 
     while True:
-        rset = select.select([sender.fd()], [], [], next_sleep_time)[0]
+        rset = select.select([sender.f()], [], [], next_sleep_time)[0]
         for r in rset:
-            if r == sender.fd():
+            if r == sender.f():
                 result = sender.recv()
                 print result, [len(item) for item in result]
                 sender.send('remote accept:' + result[0])
