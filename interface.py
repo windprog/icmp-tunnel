@@ -33,7 +33,6 @@ class BaseSender(object):
     def tfd(self):
         pass
 
-    @abstractmethod
     def __str__(self):
         return repr(self)
 

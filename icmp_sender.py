@@ -30,6 +30,8 @@ class ICMPSender(BaseSender):
         self.pending_list = []
         data_list = pending_list + [data]
         result = TunnelPacket.create(self.icmp_type, 0, self.now_identity, 0x4147, data_list=data_list).dumps()
+        if self.debug:
+            print 'send ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (self.server_ip, self.icmp_type, 0, self.now_identity, 0x4147, repr(data_list))
         return self.icmpfd.sendto(result, (self.server_ip, 1))
 
     def recv(self):
@@ -40,6 +42,8 @@ class ICMPSender(BaseSender):
         data_list = packet.data_list
         for one_data in data_list:
             self.cmd_control.check(one_data)
+        if self.debug:
+            print 'recv from_ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (packet.src, packet.type, packet.code, packet.id, packet.seqno, repr(packet.data_list))
         return data_list
 
     def tfd(self):
@@ -60,21 +64,29 @@ class ClientICMPSender(ICMPSender):
 
 
 if __name__ == '__main__':
-    import sys, select
+    import sys, select, time
 
-    if sys.argv[1:]:
+    if not sys.argv[1:]:
         sender = ServerICMPSender()
     else:
         # 预设server ip
         sender = ClientICMPSender(sys.argv[1])
+    sender.debug = True
+    next_sleep_time = 0.01
 
     while True:
-        rset = select.select([sender.tfd()], [], [])[0]
+        rset = select.select([sender.tfd()], [], [], next_sleep_time)[0]
         for r in rset:
             if r == sender.tfd():
                 result = sender.recv()
                 print result, [len(item) for item in result]
                 sender.send('remote accept:' + result[0])
-        print u'-' * 50
+
         data = raw_input('input data：')
+        if data.isdigit():
+            next_sleep_time = int(data)
+            continue
+        else:
+            next_sleep_time = 0.01
+        print u'-' * 50
         sender.send(data)
