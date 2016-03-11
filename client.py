@@ -6,14 +6,14 @@ import socket
 import select
 import time
 import traceback
-from sender import BaseTunnel
+from sender import ICMPSender
 from packet import TunnelPacket
 
 TUN_IP = "10.1.2.2"
 TUN_PEER = '10.1.2.1'
 
 
-class Tunnel(BaseTunnel):
+class Tunnel(ICMPSender):
     IP_DOMAIN = 'xxxx.f3322.org'
 
     def __init__(self, tun_ip, tun_peer):
