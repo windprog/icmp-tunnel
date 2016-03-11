@@ -28,4 +28,8 @@ class Poll(BasePoll):
     def wait(self, timeout=0.01):
         rset = select.select(self._wait_select_list, [], [], timeout)[0]
         for r in rset:
-            yield r.fileno(), None
+            if isinstance(r, int):
+                fileno = r
+            else:
+                fileno = r.fileno()
+            yield fileno, None

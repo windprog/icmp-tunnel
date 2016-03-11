@@ -38,13 +38,13 @@ class ICMPSender(BaseSender):
     def recv(self):
         buf = self.icmpfd.recv(BUFFER_SIZE)
         packet = TunnelPacket(buf)
+        if self.debug:
+            print 'recv from_ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (packet.src, packet.type, packet.code, packet.id, packet.seqno, repr(packet.data_list))
         target_remote_icmp_type = ServerICMPSender.ICMP_TYPE if self.icmp_type == ClientICMPSender.ICMP_TYPE else \
             ClientICMPSender.ICMP_TYPE
         if packet.seqno != 0x4147 or packet.type != target_remote_icmp_type:
             # 非正常数据
             return []
-        if self.debug:
-            print 'recv from_ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (packet.src, packet.type, packet.code, packet.id, packet.seqno, repr(packet.data_list))
         self.now_identity = packet.id
         self.server_ip = packet.src
         data_list = packet.data_list

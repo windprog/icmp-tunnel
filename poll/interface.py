@@ -23,10 +23,12 @@ class BasePoll(object):
 
     @abstractmethod
     def register(self, f):
+        # f 文件描述符
         pass
 
     @abstractmethod
     def unregister(self, f):
+        # f 文件描述符
         pass
 
     @abstractmethod
