@@ -11,20 +11,12 @@ Desc    :
 import os, sys
 import getopt
 import socket
-import select
 import time
 import traceback
-import platform
 from interface import BaseSender
 from icmp_sender import ServerICMPSender, ClientICMPSender
 from tun_sender import TunInstance
-from poll import OS
-
-if OS == 'freebsd' or OS == 'darwin':
-    # TODO bsd 兼容放入tun file no
-    from poll.default_poll import Poll, BasePoll
-else:
-    from poll import Poll, BasePoll
+from tun_poll import TunPoll, BasePoll
 
 TUN_IP = "10.1.2.1"
 TUN_PEER = '10.1.2.2'
@@ -34,9 +26,9 @@ class SelectTunnel(object):
     def __init__(self, pkg_sender, tun_sender):
         self.pkg_sender = pkg_sender
         self.tun_sender = tun_sender
-        self.poll = Poll()
-        self.poll.add(self.pkg_sender.f())
-        self.poll.register(self.tun_sender.fd())
+        self.poll = TunPoll()
+        self.poll.register_tun(self.tun_sender.fd())
+        self.poll.register_socket(self.pkg_sender.fd())
         assert isinstance(self.poll, BasePoll)
         assert isinstance(pkg_sender, BaseSender)
         assert isinstance(tun_sender, BaseSender)
