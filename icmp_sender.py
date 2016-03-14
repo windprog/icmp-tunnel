@@ -33,7 +33,10 @@ class ICMPSender(BaseSender):
         result = TunnelPacket.create(self.icmp_type, icmp_code, self.now_identity, 0x4147, data_list=data_list).dumps()
         if self.debug:
             print 'send ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (self.server_ip, self.icmp_type, icmp_code, self.now_identity, 0x4147, repr(data_list))
-        return self.icmpfd.sendto(result, (self.server_ip, 1))
+        try:
+            ret = self.icmpfd.sendto(result, (self.server_ip, 1))
+        except socket.error, e:
+            print 'socket error', e.errno
 
     def recv(self):
         buf = self.icmpfd.recv(BUFFER_SIZE)

@@ -24,3 +24,6 @@ class CommandControl(object):
             if data.startswith('req:'):
                 self.recv_heartbeat(data)
                 return True
+            elif data.startswith('res:'):
+                # print 'recv heartbeat response'
+                pass

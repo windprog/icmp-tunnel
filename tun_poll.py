@@ -76,7 +76,7 @@ if OS == 'darwin':
             return self.register(f)
 
 
-    TunPoll = BsdTunPoll
-    # TunPoll = SelectTunPoll
+    # TunPoll = BsdTunPoll
+    TunPoll = SelectTunPoll
 else:
     TunPoll = LinuxTunPoll
