@@ -89,9 +89,10 @@ class ClientTunnel(SelectTunnel):
 
 
 if __name__ == "__main__":
-    opts = getopt.getopt(sys.argv[1:], "c:l:p:d:")
+    opts = getopt.getopt(sys.argv[1:], "c:l:p:d:t:")
     is_server = True
     DEBUG = False
+    _type = 'icmp'
     for opt, optarg in opts[0]:
         if opt == "-c":
             is_server = False
@@ -102,14 +103,25 @@ if __name__ == "__main__":
             TUN_PEER = optarg
         elif opt == '-d':
             DEBUG = True
+        elif opt == '-t':
+            _type = optarg
 
-    tun_sender = TunInstance(TUN_IP, TUN_PEER)
+    if _type == 'udp':
+        from udp_sender import ClientUDPSender as ClientSender
+        from udp_sender import ServerUDPSender as ServerSender
+    else:
+        from icmp_sender import ClientICMPSender as ClientSender
+        from icmp_sender import ServerICMPSender as ServerSender
+
     if is_server:
-        pkg_sender = ServerICMPSender()
+        SenderBuilder = ServerSender
         tunnel_builder = SelectTunnel
     else:
-        pkg_sender = ClientICMPSender()
+        SenderBuilder = ClientSender
         tunnel_builder = ClientTunnel
+
+    pkg_sender = SenderBuilder()
+    tun_sender = TunInstance(TUN_IP, TUN_PEER)
     pkg_sender.debug = DEBUG
 
     tunnel = tunnel_builder(pkg_sender, tun_sender)
