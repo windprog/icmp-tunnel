@@ -56,7 +56,6 @@ class ICMPSender(BaseSender):
         self.now_identity = packet.id
         self.server_ip = packet.src
         data_list = packet.data_list
-        data_list = [item.decode('base64') for item in data_list]
         is_command = False
         for one_data in data_list:
             is_command = self.cmd_control.check(one_data)
