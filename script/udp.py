@@ -7,8 +7,11 @@
     Updated: 2014-6-3 P2P network packet exchange
     Updated: 2015-6-2 for mac
 '''
-
 import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from tun import Tun
+
+
 import hashlib
 import getopt
 import fcntl
@@ -59,8 +62,12 @@ class Server():
     def run(self):
         """ Server packets loop """
         global PORT
-        self.tun_fd, self.tname = self.create_tun()
-        self.config_tun(IFACE_IP, IFACE_PEER, self.tname)
+        # default
+        # self.tun_fd, self.tname = self.create_tun()
+        # self.config_tun(IFACE_IP, IFACE_PEER, self.tname)
+
+        self.tun_fd, self.tname = Tun().create_tun(IFACE_IP, IFACE_PEER)
+
         self.udpfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udpfd.bind(("", PORT))
         self.sessions = []
@@ -112,8 +119,12 @@ class Client():
     def run(self):
         """ Client network loop """
         global PORT
-        self.tun_fd, self.tname = self.create_tun()
-        self.config_tun(IFACE_IP, IFACE_PEER, self.tname)
+        # default
+        # self.tun_fd, self.tname = self.create_tun()
+        # self.config_tun(IFACE_IP, IFACE_PEER, self.tname)
+
+        self.tun_fd, self.tname = Tun().create_tun(IFACE_IP, IFACE_PEER)
+
         self.udpfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udpfd.bind(("", 0))
         self.logged = False
