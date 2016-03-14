@@ -102,6 +102,7 @@ class TunnelPacket(ICMPPacket):
         # 载入二进制数据或者创建空对象
         self.session_id = 0  # 保留字段,用于判断来源
         self.data_list = []
+        self.garbage = ''
         super(TunnelPacket, self).__init__(buf)
         if buf and self.DEBUG:
             print "parse Tunnel session_id=", self.session_id, "data_count", len(self.data_list)
@@ -131,10 +132,10 @@ class TunnelPacket(ICMPPacket):
             data_len = struct.unpack("!H", data_len_str)[0]
 
     @classmethod
-    def create(cls, _type, code, _id, seqno, session_id=0, data_list=[]):
+    def create(cls, _type, code, _id, seqno, session_id=0, data_list=[], garbage=''):
         # 创建对象
         pk = cls()
-        pk.type, pk.code, pk.id, pk.seqno, pk.session_id, pk.data_list = _type, code, _id, seqno, session_id, data_list
+        pk.type, pk.code, pk.id, pk.seqno, pk.session_id, pk.data_list, pk.garbage = _type, code, _id, seqno, session_id, data_list, garbage
         return pk
 
     def dumps(self):
@@ -144,6 +145,10 @@ class TunnelPacket(ICMPPacket):
         for data in self.data_list:
             assert len(data) < 65535
             data_args.extend((len(data), data))
+        # add garbage
+        if self.garbage:
+            packfmt += "%ss" % len(self.garbage)
+            data_args.append(self.garbage)
         icmp_args = [self.type, self.code, 0, self.id, self.seqno]
         args = icmp_args + [self.session_id] + data_args
         # 最小包

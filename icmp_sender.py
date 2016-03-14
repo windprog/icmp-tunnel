@@ -9,6 +9,8 @@ Desc    :
 """
 import socket
 import traceback
+import os
+from random import randint
 from packet import TunnelPacket
 from interface import BaseSender, BUFFER_SIZE
 from cmd_control import CommandControl
@@ -30,9 +32,11 @@ class ICMPSender(BaseSender):
         self.pending_list = []
         data_list = pending_list + [data]
         icmp_code = 0
-        result = TunnelPacket.create(self.icmp_type, icmp_code, self.now_identity, 0x4147, data_list=data_list).dumps()
+        result = TunnelPacket.create(
+            self.icmp_type, icmp_code, self.now_identity, 0x4147, data_list=data_list, garbage='').dumps()
         if self.debug:
-            print 'send ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (self.server_ip, self.icmp_type, icmp_code, self.now_identity, 0x4147, repr(data_list))
+            print 'send ip:%s type:%s code:%s identity:%s seqno:%s total_count:%s data:%s' % (
+                self.server_ip, self.icmp_type, icmp_code, self.now_identity, 0x4147, len(result) - 8, repr(data_list))
         try:
             ret = self.icmpfd.sendto(result, (self.server_ip, 1))
         except socket.error, e:
@@ -42,7 +46,8 @@ class ICMPSender(BaseSender):
         buf = self.icmpfd.recv(BUFFER_SIZE)
         packet = TunnelPacket(buf)
         if self.debug:
-            print 'recv from_ip:%s type:%s code:%s identity:%s seqno:%s data:%s' % (packet.src, packet.type, packet.code, packet.id, packet.seqno, repr(packet.data_list))
+            print 'recv from_ip:%s type:%s code:%s identity:%s seqno:%s total_count:%s data:%s' % (
+                packet.src, packet.type, packet.code, packet.id, packet.seqno, len(buf), repr(packet.data_list))
         target_remote_icmp_type = ServerICMPSender.ICMP_TYPE if self.icmp_type == ClientICMPSender.ICMP_TYPE else \
             ClientICMPSender.ICMP_TYPE
         if packet.seqno != 0x4147 or packet.type != target_remote_icmp_type:
@@ -51,6 +56,7 @@ class ICMPSender(BaseSender):
         self.now_identity = packet.id
         self.server_ip = packet.src
         data_list = packet.data_list
+        data_list = [item.decode('base64') for item in data_list]
         is_command = False
         for one_data in data_list:
             is_command = self.cmd_control.check(one_data)
@@ -67,13 +73,15 @@ class ICMPSender(BaseSender):
 
 class ServerICMPSender(ICMPSender):
     ICMP_TYPE = 18
-    def __init__(self):
+
+    def __init__(self, server_ip=''):
         super(ServerICMPSender, self).__init__()
         self.icmp_type = self.ICMP_TYPE
 
 
 class ClientICMPSender(ICMPSender):
     ICMP_TYPE = 17
+
     def __init__(self, server_ip=''):
         # check_heartbeat 会设置server_ip
         super(ClientICMPSender, self).__init__(server_ip=server_ip)
@@ -91,19 +99,48 @@ if __name__ == '__main__':
     sender.debug = True
     next_sleep_time = 0.01
 
-    while True:
-        rset = select.select([sender.f()], [], [], next_sleep_time)[0]
-        for r in rset:
-            if r == sender.f():
-                result = sender.recv()
-                print result, [len(item) for item in result]
-                sender.send('remote accept:' + result[0])
+    stop = False
 
-        data = raw_input('input data：')
-        if data.isdigit():
-            next_sleep_time = int(data)
-            continue
-        else:
-            next_sleep_time = 0.01
-        print u'-' * 50
-        sender.send(data)
+
+    def print_result():
+        try:
+            while not stop:
+                rset = select.select([sender.f()], [], [], next_sleep_time)[0]
+                for r in rset:
+                    if r == sender.f():
+                        result = sender.recv()
+                        # print repr(result), [len(item) for item in result]
+        except KeyboardInterrupt:
+            pass
+        except:
+            print traceback.format_exc()
+        finally:
+            # Cleanup something.
+            pass
+
+
+    import threading
+
+    thread = threading.Thread(target=print_result)
+    thread.start()
+
+    try:
+        while True:
+            data = raw_input('input data：')
+            if not data:
+                stop = True
+                break
+            if data.isdigit():
+                next_sleep_time = int(data)
+                continue
+            else:
+                next_sleep_time = 0.01
+            print u'-' * 50
+            sender.send(data)
+    except KeyboardInterrupt:
+        pass
+    except:
+        print traceback.format_exc()
+    finally:
+        # Cleanup something.
+        pass

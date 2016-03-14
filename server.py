@@ -100,10 +100,11 @@ if __name__ == "__main__":
     DEBUG = False
     _type = 'icmp'
     password = ''
+    server_ip = ''
     for opt, optarg in opts[0]:
         if opt == "-c":
             is_server = False
-            ClientTunnel.IP_DOMAIN = optarg
+            ClientTunnel.IP_DOMAIN = server_ip = optarg
         elif opt == "-l":
             TUN_IP = optarg
         elif opt == '-p':
@@ -118,6 +119,9 @@ if __name__ == "__main__":
     if _type == 'udp':
         from udp_sender import ClientUDPSender as ClientSender
         from udp_sender import ServerUDPSender as ServerSender
+    elif _type == 'tcp':
+        from tcp_sender import ClientTCPSender as ClientSender
+        from tcp_sender import ServerTCPSender as ServerSender
     else:
         from icmp_sender import ClientICMPSender as ClientSender
         from icmp_sender import ServerICMPSender as ServerSender
@@ -129,7 +133,7 @@ if __name__ == "__main__":
         SenderBuilder = ClientSender
         tunnel_builder = ClientTunnel
 
-    pkg_sender = SenderBuilder()
+    pkg_sender = SenderBuilder(server_ip=server_ip)
     tun_sender = TunInstance(TUN_IP, TUN_PEER)
     pkg_sender.debug = DEBUG
 
