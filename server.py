@@ -22,13 +22,17 @@ TUN_IP = "10.1.2.1"
 TUN_PEER = '10.1.2.2'
 
 
-class SelectTunnel(object):
-    def __init__(self, pkg_sender, tun_sender):
+class Tunnel(object):
+    def __init__(self, pkg_sender, tun_sender, password=''):
         self.pkg_sender = pkg_sender
         self.tun_sender = tun_sender
         self.poll = TunPoll()
         self.poll.register_tun(self.tun_sender.fd())
         self.poll.register_socket(self.pkg_sender.fd())
+        self.cipher = None
+        if password:
+            from cipher import AESCipher
+            self.cipher = AESCipher(password)
         assert isinstance(self.poll, BasePoll)
         assert isinstance(pkg_sender, BaseSender)
         assert isinstance(tun_sender, BaseSender)
@@ -45,31 +49,33 @@ class SelectTunnel(object):
             self.process()
 
     def process(self):
-        # rset = select.select([self.pkg_sender.tfd(), self.tun_sender.tfd()], [], [], 0.01)[0]
-        # for r in rset:
         for fileno, event in self.poll.wait(timeout=0.01):
             if fileno == self.tun_sender.fd():
                 # tun 模块收到数据
                 for data in self.tun_sender.recv():
                     # 这里没有实现读到不能读,需要重构一下
+                    if self.cipher:
+                        data = self.cipher.encrypt(data)
                     self.pkg_sender.send(data)
             elif fileno == self.pkg_sender.fd():
                 # 网络收到数据
                 now = time.time()
                 for data in self.pkg_sender.recv():
                     self.last_recv = now
+                    if self.cipher:
+                        data = self.cipher.decrypt(data)
                     os.write(self.tun_sender.fd(), data)
 
 
-class ServerTunnel(SelectTunnel):
+class ServerTunnel(Tunnel):
     pass
 
 
-class ClientTunnel(SelectTunnel):
+class ClientTunnel(Tunnel):
     IP_DOMAIN = 'xxxx.f3322.org'
 
-    def __init__(self, pkg_sender, tun_sender):
-        super(ClientTunnel, self).__init__(pkg_sender, tun_sender)
+    def __init__(self, pkg_sender, tun_sender, **kwargs):
+        super(ClientTunnel, self).__init__(pkg_sender, tun_sender, **kwargs)
 
         self.heartbeat_data = 'req:'
         self.check_heartbeat()
@@ -89,10 +95,11 @@ class ClientTunnel(SelectTunnel):
 
 
 if __name__ == "__main__":
-    opts = getopt.getopt(sys.argv[1:], "c:l:p:d:t:")
+    opts = getopt.getopt(sys.argv[1:], "c:l:p:d:t:w:", )
     is_server = True
     DEBUG = False
     _type = 'icmp'
+    password = ''
     for opt, optarg in opts[0]:
         if opt == "-c":
             is_server = False
@@ -105,6 +112,8 @@ if __name__ == "__main__":
             DEBUG = True
         elif opt == '-t':
             _type = optarg
+        elif opt == '-p':
+            password = optarg
 
     if _type == 'udp':
         from udp_sender import ClientUDPSender as ClientSender
@@ -115,7 +124,7 @@ if __name__ == "__main__":
 
     if is_server:
         SenderBuilder = ServerSender
-        tunnel_builder = SelectTunnel
+        tunnel_builder = Tunnel
     else:
         SenderBuilder = ClientSender
         tunnel_builder = ClientTunnel
@@ -124,7 +133,7 @@ if __name__ == "__main__":
     tun_sender = TunInstance(TUN_IP, TUN_PEER)
     pkg_sender.debug = DEBUG
 
-    tunnel = tunnel_builder(pkg_sender, tun_sender)
+    tunnel = tunnel_builder(pkg_sender, tun_sender, password=password)
     print "Allocated interface %s" % (tun_sender.tname)
     try:
         tunnel.forever()

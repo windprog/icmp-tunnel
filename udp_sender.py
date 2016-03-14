@@ -26,7 +26,8 @@ class UDPSender(BaseSender):
         try:
             ret = self.udpfd.sendto(data, (self.server_ip, self.port))
             if self.debug:
-                print 'send ip:%s type:udp port:%s count:%s data:%s' % (self.server_ip, self.port, len(data), repr(data))
+                print 'send ip:%s type:udp port:%s data_count:%s data:%s' % (
+                    self.server_ip, self.port, len(data), repr(data))
             return ret
         except socket.error, e:
             print 'socket error', e.errno
@@ -45,15 +46,16 @@ class ServerUDPSender(UDPSender):
         self.udpfd.bind(("", 0x4147))
 
     def recv(self):
-        buf, addr = self.udpfd.recvfrom(BUFFER_SIZE)
+        data, addr = self.udpfd.recvfrom(BUFFER_SIZE)
         self.server_ip = addr[0]
         self.port = addr[1]
-        is_command = self.cmd_control.check(buf)
+        is_command = self.cmd_control.check(data)
         if self.debug:
-            print 'recv ip:%s type:udp port:%s count:%s data:%s' % (self.server_ip, self.port, len(buf), repr(buf))
+            print 'recv ip:%s type:udp port:%s data_count:%s data:%s' % (
+                self.server_ip, self.port, len(data), repr(data))
         if is_command:
             return []
-        return [buf]
+        return [data]
 
 
 class ClientUDPSender(UDPSender):
@@ -63,13 +65,14 @@ class ClientUDPSender(UDPSender):
         self.udpfd.bind(("", 0))
 
     def recv(self):
-        buf, _ = self.udpfd.recvfrom(BUFFER_SIZE)
-        is_command = self.cmd_control.check(buf)
+        data, _ = self.udpfd.recvfrom(BUFFER_SIZE)
+        is_command = self.cmd_control.check(data)
         if self.debug:
-            print 'recv ip:%s type:udp port:%s count:%s data:%s' % (self.server_ip, self.port, len(buf), repr(buf))
+            print 'recv ip:%s type:udp port:%s data_count:%s data:%s' % (
+                self.server_ip, self.port, len(data), repr(data))
         if is_command:
             return []
-        return [buf]
+        return [data]
 
 
 if __name__ == '__main__':
@@ -83,19 +86,48 @@ if __name__ == '__main__':
     sender.debug = True
     next_sleep_time = 0.01
 
-    while True:
-        rset = select.select([sender.f()], [], [], next_sleep_time)[0]
-        for r in rset:
-            if r == sender.f():
-                result = sender.recv()
-                print result, [len(item) for item in result]
-                sender.send('remote accept:' + result[0])
+    stop = False
 
-        data = raw_input('input data：')
-        if data.isdigit():
-            next_sleep_time = int(data)
-            continue
-        else:
-            next_sleep_time = 0.01
-        print u'-' * 50
-        sender.send(data)
+
+    def print_result():
+        try:
+            while not stop:
+                rset = select.select([sender.f()], [], [], next_sleep_time)[0]
+                for r in rset:
+                    if r == sender.f():
+                        result = sender.recv()
+                        print repr(result), [len(item) for item in result]
+        except KeyboardInterrupt:
+            pass
+        except:
+            print traceback.format_exc()
+        finally:
+            # Cleanup something.
+            pass
+
+
+    import threading
+
+    thread = threading.Thread(target=print_result)
+    thread.start()
+
+    try:
+        while True:
+            data = raw_input('input data：')
+            if not data:
+                stop = True
+                break
+            if data.isdigit():
+                next_sleep_time = int(data)
+                continue
+            else:
+                next_sleep_time = 0.01
+            print u'-' * 50
+            sender.send(data)
+    except KeyboardInterrupt:
+        pass
+    except:
+        print traceback.format_exc()
+    finally:
+        # Cleanup something.
+        pass
